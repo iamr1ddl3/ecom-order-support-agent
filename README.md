@@ -1,4 +1,4 @@
-# Order-Support Agent — Harness, Tools & Grounding
+# eCom Order Support Agent — Harness, Tools & Grounding
 
 A multi-turn e-commerce order-support agent. It handles four ticket types — order
 status, delivery issues, refund requests, and subscription/account questions —
@@ -23,7 +23,7 @@ so honestly when no doc covers the question).
 ```bash
 # 1. clone
 git clone <your-repo-url>
-cd order-support-agent
+cd ecom-order-support-agent
 
 # 2. create and activate a virtual environment
 python3 -m venv .venv
