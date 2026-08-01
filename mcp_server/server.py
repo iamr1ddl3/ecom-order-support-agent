@@ -32,9 +32,14 @@ try:
 except ImportError:  # launched as a bare script (sys.path is the package dir)
     import mock_data as data
 
-# Ticket this server instance is scoped to. Empty = unscoped (never used by the
-# agent; only a bare manual launch could leave it empty).
+# Ticket this server instance is scoped to. Fail closed: an unset var means we
+# can't verify ownership, so refuse to start rather than serve every customer.
 TICKET_CUSTOMER_ID = os.environ.get("TICKET_CUSTOMER_ID", "")
+if not TICKET_CUSTOMER_ID:
+    raise RuntimeError(
+        "TICKET_CUSTOMER_ID is not set. Refusing to start: the ownership check "
+        "would be skipped, exposing every customer's orders and accounts."
+    )
 
 mcp = FastMCP("order-support", log_level="WARNING")
 
@@ -45,7 +50,7 @@ def lookup_order(order_id: str) -> dict:
     order = data.ORDERS.get(order_id)
     if not order:
         raise ToolError(f"No such order '{order_id}'.")
-    if TICKET_CUSTOMER_ID and order["customer_id"] != TICKET_CUSTOMER_ID:
+    if order["customer_id"] != TICKET_CUSTOMER_ID:
         raise ToolError(
             f"PermissionError: order '{order_id}' does not belong to customer "
             f"'{TICKET_CUSTOMER_ID}' on this ticket. Request rejected."
@@ -56,7 +61,7 @@ def lookup_order(order_id: str) -> dict:
 @mcp.tool()
 def check_account_status(customer_id: str) -> dict:
     """Look up a customer account's standing and order history by customer ID."""
-    if TICKET_CUSTOMER_ID and customer_id != TICKET_CUSTOMER_ID:
+    if customer_id != TICKET_CUSTOMER_ID:
         raise ToolError(
             f"PermissionError: customer '{customer_id}' does not match customer "
             f"'{TICKET_CUSTOMER_ID}' on this ticket. Request rejected."
