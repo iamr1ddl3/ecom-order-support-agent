@@ -29,6 +29,7 @@ from contextlib import AsyncExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -121,6 +122,13 @@ class Ticket:
 
 class Harness:
     def __init__(self, provider_name: str | None = None):
+        # Load .env here, not just in main.py: the eval, judge, before/after and
+        # HTTP entry points all construct a Harness, and every one of them needs
+        # the provider key. It also has to happen before the MCP subprocess is
+        # spawned, since that inherits os.environ (see _converse_inner).
+        # load_dotenv does not override real environment variables, so CI and ECS
+        # (which inject config directly) are unaffected.
+        load_dotenv()
         self.provider = get_provider(provider_name)
         self.tools = tools_for(self.provider.name)
         self.retriever = Retriever()
