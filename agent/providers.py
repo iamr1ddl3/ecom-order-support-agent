@@ -27,7 +27,7 @@ import json
 import os
 from dataclasses import dataclass, field
 
-from .tools_schema import TOOLS_BY_PROVIDER
+from .tools_schema import tools_by_provider
 
 # Per-provider config for the OpenAI-compatible backends. base_url + api key env
 # are the only things that differ between Groq and GLM.
@@ -211,6 +211,11 @@ def get_provider(name: str | None = None):
 
 def tools_for(provider_name: str) -> list:
     """Tool specs in the shape the given provider expects. Groq and GLM share the
-    OpenAI shape, so both map to the 'groq' spec set."""
+    OpenAI shape, so both map to the 'groq' spec set.
+
+    Built per call rather than read from the module-level mapping so that
+    AGENT_REGRESSION (§2.4) applies even when it's set after import — which is
+    exactly what eval/before_after.py does when it runs both variants in one
+    process."""
     key = "anthropic" if provider_name == "anthropic" else "groq"
-    return TOOLS_BY_PROVIDER[key]
+    return tools_by_provider()[key]

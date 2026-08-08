@@ -189,7 +189,13 @@ class Harness:
         """Returns (context_block, hits). Empty hits => honest gap; the context
         block tells the model to say so instead of guessing."""
         with _observe("retriever", "retrieve-policy", input={"query": message}) as span:
-            hits = self.retriever.retrieve(message, k=2)
+            # AGENT_REGRESSION=no_retrieval (§2.4): break the retrieval step so
+            # policy answers become ungrounded recollection. The model still
+            # answers confidently; only the trajectory shows nothing was retrieved.
+            if os.environ.get("AGENT_REGRESSION") == "no_retrieval":
+                hits = []
+            else:
+                hits = self.retriever.retrieve(message, k=2)
             for doc_id, score, _ in hits:
                 print(f"  [RETRIEVER] used chunk: {doc_id} (score={score:.2f})")
                 ticket.steps.append(Step("retrieval", doc_id, detail=f"score={score:.2f}"))
