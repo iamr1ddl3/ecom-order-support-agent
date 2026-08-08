@@ -58,9 +58,19 @@ if __name__ == "__main__":
                         help="LLM provider (default: $LLM_PROVIDER or anthropic)")
     args = parser.parse_args()
 
-    if args.demo:
-        run_demo(args.provider)
-    elif args.customer:
-        run_chat(args.provider, args.customer)
-    else:
+    if not (args.demo or args.customer):
         parser.error("choose one of --demo or --customer <id>")
+
+    # Imported here, not at module top: agent.tracing reads LANGFUSE_* from the
+    # environment, so it must land after load_dotenv() above.
+    from agent.tracing import flush
+
+    try:
+        if args.demo:
+            run_demo(args.provider)
+        else:
+            run_chat(args.provider, args.customer)
+    finally:
+        # Short-lived process: without this the spans are buffered and dropped at
+        # exit, and the run looks successful while delivering nothing.
+        flush()

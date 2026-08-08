@@ -158,15 +158,55 @@ class OpenAICompatibleProvider:
 _VALID = {"anthropic", "groq", "glm"}
 
 
+def _trace_create(provider):
+    """Wrap provider.create() in a LangFuse `generation` observation (§2.1).
+
+    Applied at the factory, not inside each class, so all three backends are
+    instrumented from one place and a future provider can't quietly ship
+    untraced. `as_type="generation"` (rather than a generic span) is what makes
+    LangFuse capture model and token usage automatically.
+    """
+    from agent.tracing import get_tracer, tracing_enabled
+
+    if not tracing_enabled():
+        return provider
+
+    inner = provider.create
+
+    def create(system: str, messages: list, tools: list) -> Response:
+        with get_tracer().start_as_current_observation(
+            as_type="generation",
+            name=f"{provider.name}-create",
+            model=provider._model,
+            input=messages,
+        ) as gen:
+            resp = inner(system, messages, tools)
+            gen.update(
+                output=resp.text or [{"tool": tc.name, "input": tc.input} for tc in resp.tool_calls],
+                metadata={"stop_reason": resp.stop_reason},
+            )
+            # Token counts live in different places per SDK shape; report them when
+            # the provider exposes them rather than guessing a common field.
+            usage = getattr(resp.raw, "usage", None)
+            if usage is not None:
+                gen.update(usage_details={
+                    "input": getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", 0),
+                    "output": getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", 0),
+                })
+            return resp
+
+    provider.create = create
+    return provider
+
+
 def get_provider(name: str | None = None):
     """Factory. Defaults to $LLM_PROVIDER, then 'anthropic'. The harness calls this
     once; everything downstream is provider-agnostic."""
     name = (name or os.environ.get("LLM_PROVIDER") or "anthropic").lower()
     if name not in _VALID:
         raise ValueError(f"Unknown provider '{name}'. Choose from {sorted(_VALID)}.")
-    if name == "anthropic":
-        return AnthropicProvider()
-    return OpenAICompatibleProvider(name)
+    provider = AnthropicProvider() if name == "anthropic" else OpenAICompatibleProvider(name)
+    return _trace_create(provider)
 
 
 def tools_for(provider_name: str) -> list:
