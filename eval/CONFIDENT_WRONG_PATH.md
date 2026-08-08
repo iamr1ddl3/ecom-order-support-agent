@@ -1,10 +1,17 @@
 # The confident wrong path (§2.2)
 
-A real case, found by reading trajectories from an actual eval run — not a
-fixture written to satisfy the requirement. It was not the ticket I expected to
-find it in.
+Two real cases, both found by reading output from actual eval runs rather than
+written to satisfy the requirement. Neither was the ticket expected to produce
+one.
 
-## The case: ticket T03
+They fail in different ways, which is why both are here: T03 is a *contaminated
+path with a correct answer*, T07 is a *correct path with a false answer*. A gate
+that only checks one of trajectory or final text misses one of them, and the
+suite as committed passes both.
+
+---
+
+## Case 1: ticket T03
 
 **Question** (a plain order-status question, no policy content at all):
 
@@ -106,3 +113,62 @@ Expected output:
 retrieved: [('subscription_cancellation', 1.47)]
 matched term: ['ever']
 ```
+
+---
+
+## Case 2: ticket T07 — the trajectory is right and the answer is false
+
+Found by the LLM-as-judge (§2.3), which scored it **0.00 on all three runs**.
+This is the mirror image of T03 and the more dangerous of the two.
+
+**Question:** "My order arrived 9 days late. Do I get the shipping fee back?"
+
+**Trajectory:** `retrieval:shipping_delays` — exactly the required step. Right
+doc, right path, nothing spurious.
+
+**The answer:**
+
+> order delivered on 2026-07-18 ... the order was 9 days later than the original
+> estimated arrival date ... no indication the delay was caused by severe weather
+
+**The actual record:**
+
+```python
+'ord_7004': {'customer_id': 'cust_3003', 'item': 'Mechanical Keyboard',
+             'status': 'delayed', 'delivery_date': '2026-07-18'}
+```
+
+The status is **`delayed`** — the order has not arrived. `2026-07-18` is the
+*estimated* delivery date, and the agent reported it as the date the package
+*was delivered*. It then derived "9 days late" from that misreading and issued a
+severe-weather ruling on evidence that does not exist.
+
+A customer reads a specific date and a specific entitlement decision. Both are
+manufactured from a field the agent misinterpreted.
+
+### Why the trajectory eval cannot catch this
+
+T07's `required_steps` is `["retrieval:shipping_delays"]`. That retrieval
+happened. Superset satisfied. **PASS.**
+
+There is no version of a path check that catches this, because the path is
+correct. The agent did everything right and then misread one field. This is the
+exact division of labour §2.3 describes: a rule verifies that the right steps
+ran; only a judge reading the response against the record can see that the claim
+built on those steps is false.
+
+### Together, T03 and T07 are the argument for both scorers
+
+| | T03 | T07 |
+|---|---|---|
+| Trajectory | contaminated (spurious doc) | correct |
+| Final answer | correct | **false** |
+| Trajectory eval | PASS | PASS |
+| LLM judge | 10.00 | **0.00** |
+
+Neither scorer catches both. The trajectory eval is the CI gate because it is
+cheap, deterministic, and blocks the regression class §2.4 asks about; the judge
+is not in the gate because a non-deterministic score that swings 7 points
+between identical runs (see JUDGE_RESULTS.md) cannot be a build-breaking
+threshold. This is Defensible #2 in concrete form: **what the gate checks is the
+path, and T07 is precisely what that choice cannot catch.**

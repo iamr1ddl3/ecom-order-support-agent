@@ -70,25 +70,38 @@ RESPONSE:
 Reply with JSON only: {{"score": <0-10>, "unsupported_claims": ["..."], "reason": "<one sentence>"}}"""
 
 
-def resolve_reference(ticket: dict) -> str:
-    """Turn a ticket's `reference` field into the actual ground-truth text.
+def resolve_reference(ticket: dict, retrieved_docs: list[str] | None = None) -> str:
+    """Build the ground truth the response is fact-checked against.
 
-    'policy_doc:<id>' expands to the doc body; anything else is already a literal
-    fact string (an order or account record).
+    The reference must contain everything the agent was legitimately given, or
+    the judge scores correct grounding as fabrication — a broken reference
+    reported as a caught hallucination, which is wrong in the direction that
+    flatters nobody and misleads everybody. Three sources, all of which the agent
+    can actually see:
 
-    The customer's prior tickets are always appended. The agent is given that
-    history in its system prompt, so a response citing it is grounded, not
-    invented — but a reference that omitted it would score those citations as
-    fabrications. That is a broken reference, not a caught hallucination, and it
-    would make the judge's numbers worthless in the direction that looks most
-    impressive. Found by T06 scoring 0.00 for correctly recalling ticket tk_022.
+      1. the ticket's own `reference` field — the order or account record, or a
+         'policy_doc:<id>' pointer expanded to that doc's body
+      2. the customer's prior support tickets (injected into the system prompt)
+      3. any policy doc the retriever actually returned this run
+
+    (2) and (3) were both found by real 0.00 scores: T06 for correctly recalling
+    ticket tk_022, and T09/T07 for accurately quoting a policy doc the retriever
+    had handed them but the reference didn't mention. Passing retrieved_docs is
+    what keeps the judge honest when the retriever picks a doc the ticket author
+    didn't anticipate — including the wrong one (see CONFIDENT_WRONG_PATH.md).
     """
     from data.prior_tickets import get_prior_tickets
 
+    docs = load_policy_docs()
     ref = ticket.get("reference", "")
     if ref.startswith("policy_doc:"):
         doc_id = ref.split(":", 1)[1]
-        ref = load_policy_docs().get(doc_id, f"(no such policy doc: {doc_id})")
+        ref = docs.get(doc_id, f"(no such policy doc: {doc_id})")
+
+    for doc_id in retrieved_docs or []:
+        body = docs.get(doc_id)
+        if body and body not in ref:
+            ref += f"\n\nPolicy doc retrieved this run [{doc_id}]:\n{body}"
 
     prior = get_prior_tickets(ticket["customer_id"])
     if prior:
@@ -162,7 +175,10 @@ def main() -> int:
             reply = harness.send(ticket, msg)
 
         question = t["messages"][-1]
-        reference = resolve_reference(t)
+        # Ticket.steps records what the retriever actually returned, so the
+        # reference reflects this run rather than what the ticket author assumed.
+        retrieved = [s.name for s in ticket.steps if s.kind == "retrieval"]
+        reference = resolve_reference(t, retrieved)
 
         scores, verdicts = [], []
         for _ in range(args.runs):

@@ -1,0 +1,73 @@
+# The regression gate (§2.4).
+#
+# Runs the trajectory eval on every push and fails the job when the pass rate
+# drops more than MAX_DROP_POINTS below the committed baseline.
+#
+# The pass/fail decision is NOT in this file (§7): eval/trajectory_eval.py exits
+# non-zero on a regression and that exit code is all Actions needs. The same
+# command runs locally, so what CI checks is exactly what was tested by hand.
+#
+# The deploy job gates on this via `needs: eval-gate` (see deploy.yml), so a
+# regressed agent can't reach AWS.
+#
+# No untrusted event data (issue/PR titles, commit messages, head_ref) is
+# interpolated anywhere here, so there is no workflow-injection surface; the only
+# expressions are repo-owned vars and secrets, passed through env:.
+
+name: eval-gate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fast-checks:
+    # No LLM, no network, no secrets — so a fork PR and a keyless run still get
+    # real signal. Also catches the case where the scorer itself is broken, which
+    # would otherwise show up as a suspiciously green eval.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Retriever sanity (6 expected docs + the honest gap)
+        run: python -m rag.test_retriever
+      - name: Permission gate
+        run: python -m agent.test_gate
+      - name: MCP layer
+        run: python -m mcp_server.test_server
+      - name: Trajectory scorer rejects bad trajectories
+        run: python -m eval.test_check
+
+  eval-gate:
+    needs: fast-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Trajectory eval vs baseline
+        env:
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'glm' }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # BM25 in CI: pgvector needs a reachable RDS instance, and the gate is
+          # scoring the agent's trajectory, not the retrieval backend. The
+          # deployed agent runs pgvector (§2.6.2).
+          RETRIEVAL_BACKEND: bm25
+          # Tracing off: no LangFuse keys in CI. agent/tracing.py no-ops cleanly.
+          LANGFUSE_TRACING_ENABLED: "false"
+        # Non-zero exit from the script fails the job. No threshold logic here.
+        run: python -m eval.trajectory_eval
