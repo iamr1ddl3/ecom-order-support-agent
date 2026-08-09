@@ -4,3 +4,4 @@
 __pycache__/
 *.pyc
 infra/*.outputs.json
+infra/.db-password

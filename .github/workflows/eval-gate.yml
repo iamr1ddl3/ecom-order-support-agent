@@ -20,6 +20,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:   # re-run the gate on demand, e.g. after a quota reset
+  workflow_call:       # deploy.yml reuses this as its `needs:` gate (§2.6.1),
+                       # so the check blocking a deploy can't drift from the
+                       # check running on push
 
 permissions:
   contents: read

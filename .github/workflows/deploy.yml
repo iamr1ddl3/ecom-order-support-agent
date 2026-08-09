@@ -1,0 +1,96 @@
+# Deploy to ECS Fargate, gated on the eval suite (§2.6.1).
+#
+# Two properties this file exists to demonstrate:
+#
+# 1. NO STATIC AWS KEYS. Authentication is sts:AssumeRoleWithWebIdentity via
+#    GitHub's OIDC provider. There is no AWS_ACCESS_KEY_ID or
+#    AWS_SECRET_ACCESS_KEY anywhere in this repository. AWS_DEPLOY_ROLE_ARN is a
+#    repository *variable*, not a secret — a role ARN grants nothing on its own;
+#    it only works with a GitHub-signed token from this repo. Run
+#    infra/setup_oidc.sh once to create the role and trust policy.
+#
+# 2. THE GATE BLOCKS THE DEPLOY. `needs: eval-gate` means a regressed agent
+#    never reaches AWS — the same dependency Session 4's pipeline used, except
+#    the gate is no longer the last job in the pipeline.
+#
+# Manual trigger only, deliberately: this stack costs money per run (RDS bills
+# continuously), so a teaching deployment should stand up when asked, not on
+# every push to a branch.
+#
+# Injection surface: none. The only expressions used are repo-owned vars and
+# secrets plus github.sha / github.run_id, which are not attacker-controlled,
+# and every value reaches a run: block through env: rather than by direct
+# interpolation.
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm — this creates billable AWS resources'
+        required: true
+        default: ""
+
+permissions:
+  id-token: write     # required to request the OIDC token
+  contents: read
+
+jobs:
+  eval-gate:
+    # Reuses the same gate definition rather than copying the steps, so the
+    # thing blocking the deploy can't drift from the thing running on push.
+    uses: ./.github/workflows/eval-gate.yml
+    secrets: inherit
+
+  deploy:
+    needs: eval-gate
+    if: inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Authenticate to AWS via OIDC (no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-deploy
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push, tagged by commit SHA
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          # §2.6.1: SHA, not `latest` — a latest-only scheme leaves no audit
+          # trail from a running task back to the commit that produced it.
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE="$REGISTRY/ecom-agent:$IMAGE_TAG"
+          docker build --platform linux/amd64 -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Update the ECS service
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          aws cloudformation deploy \
+            --stack-name ecom-agent-stack \
+            --template-file infra/stack.yml \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides ImageUri="$IMAGE" \
+            --region "$AWS_REGION"
+
+      - name: Report the live URL
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          URL=$(aws cloudformation describe-stacks --stack-name ecom-agent-stack \
+            --query "Stacks[0].Outputs[?OutputKey=='AlbUrl'].OutputValue" \
+            --output text --region "$AWS_REGION")
+          echo "Deployed: $URL" >> "$GITHUB_STEP_SUMMARY"
+          curl -sf "$URL/health" && echo " health OK"
