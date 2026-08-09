@@ -92,6 +92,22 @@ def check(ticket: dict, steps) -> tuple[bool, list[str]]:
     return not failures, failures
 
 
+def _root_cause(exc: BaseException, depth: int = 0) -> str:
+    """Deepest meaningful error inside nested ExceptionGroups / __cause__ chains.
+
+    Everything in the harness runs under `async with stdio_client(...)`, whose
+    anyio task group re-raises as an ExceptionGroup. Reporting the outer wrapper
+    turns 'Groq rate limit' into 'unhandled errors in a TaskGroup', which is
+    exactly the information the eval needs and the only place it's visible.
+    """
+    subs = getattr(exc, "exceptions", None)
+    if subs and depth < 5:
+        return _root_cause(subs[0], depth + 1)
+    if exc.__cause__ is not None and depth < 5:
+        return _root_cause(exc.__cause__, depth + 1)
+    return f"{type(exc).__name__}: {exc}"
+
+
 def run(provider_name: str | None = None, tickets: list[dict] | None = None) -> list[TicketResult]:
     # Imported lazily so --help and baseline reads don't need API keys.
     from agent.harness import Harness, Ticket
@@ -107,9 +123,15 @@ def run(provider_name: str | None = None, tickets: list[dict] | None = None) -> 
             for msg in t["messages"]:
                 reply = harness.send(ticket, msg)
         except Exception as exc:  # a crashed run is a failed ticket, not a crashed suite
+            # Unwrap ExceptionGroup: the MCP stdio client runs in an anyio task
+            # group, so any provider error surfaces as "unhandled errors in a
+            # TaskGroup (1 sub-exception)" — which says nothing about what broke.
+            # Without this, a rate-limit in CI is indistinguishable from a real
+            # trajectory failure.
+            detail = _root_cause(exc)
             results.append(TicketResult(t["id"], t["ticket_type"], False,
-                                        failures=[f"agent raised {type(exc).__name__}: {exc}"]))
-            print(f"  [{t['id']}] ERROR {type(exc).__name__}: {exc}")
+                                        failures=[f"agent raised {detail}"]))
+            print(f"  [{t['id']}] ERROR {detail}")
             continue
 
         passed, failures = check(t, ticket.steps)
