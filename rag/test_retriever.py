@@ -7,10 +7,21 @@ expected doc, (2) the uncovered question (customs fees) clears NOTHING, so the
 honest-gap path actually fires. If you change the doc set or min_score, this is
 what tells you the coverage threshold still holds.
 
-Run: python -m rag.test_retriever   (from the project root)
+Runs against EITHER backend, because it guards the same two properties for both
+and they are the properties the pgvector migration (§2.6.2) is most likely to
+break — the threshold polarity flips from "score above 1.0" to "distance below
+0.48", so a careless port silently inverts the honest-gap logic.
+
+Run: python -m rag.test_retriever              (bm25, no database needed)
+     RETRIEVAL_BACKEND=pgvector python -m rag.test_retriever
 """
 
-from rag.retriever import Retriever
+import os
+import sys
+
+from dotenv import load_dotenv
+
+from rag.retriever import get_retriever
 
 # (question, expected top doc_id) — the "guess" half of the §7 sanity check.
 EXPECTED = [
@@ -27,8 +38,10 @@ UNCOVERED = "If my order is stuck in customs and I owe an international customs 
 
 
 def demo() -> None:
-    r = Retriever()
-    print(f"Loaded {len(r.docs)} policy docs: {list(r.docs)}\n")
+    load_dotenv()
+    backend = os.environ.get("RETRIEVAL_BACKEND", "bm25")
+    r = get_retriever()
+    print(f"Backend: {backend}\n")
 
     for question, expected in EXPECTED:
         hits = r.retrieve(question, k=1)
@@ -42,7 +55,7 @@ def demo() -> None:
     print(f"\n[{'ok' if not gap_hits else 'FAIL'}] coverage gap (customs)   <- got {[h[0] for h in gap_hits] or '(none, correct)'}")
     assert not gap_hits, f"customs question should clear nothing, got {[h[0] for h in gap_hits]}"
 
-    print("\nAll retriever sanity checks passed.")
+    print(f"\nAll retriever sanity checks passed ({backend}).")
 
 
 if __name__ == "__main__":

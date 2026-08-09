@@ -87,13 +87,29 @@ The real fix belongs in retrieval, not in the eval:
 - require ≥2 distinct matched terms before a doc clears the threshold, since a
   single common-word hit is close to meaningless on a 6-doc corpus.
 
-Deliberately left unfixed for now: **the pgvector migration (§2.6.2) replaces
-this scorer entirely.** Cosine similarity over embeddings does not have BM25's
-single-rare-term failure mode, and the threshold is being recalibrated from
-scratch there. Fixing the BM25 tokenizer would be fixing a component that is
-about to be deleted. The re-calibration in Phase 4 must confirm this specific
-query no longer pulls `subscription_cancellation` — that is the regression test
-this finding leaves behind.
+Deliberately not patched in BM25: **the pgvector migration (§2.6.2) replaces
+this scorer entirely.** Cosine similarity over embeddings has no
+single-rare-term failure mode, so fixing the BM25 tokenizer would mean fixing a
+component being replaced in the same PR.
+
+### Confirmed fixed by pgvector
+
+The prediction above was checked rather than assumed, on the same query:
+
+```
+bm25    : [('subscription_cancellation', 1.47)]
+pgvector: []
+```
+
+Dense retrieval correctly finds **nothing** relevant to a desk-delivery question
+in a 6-doc policy corpus, so no spurious context reaches the prompt. The
+single-word coincidence that produced the contamination doesn't survive
+embedding — "ever" carries no semantic weight next to "standing desk arrive".
+
+Note this makes the deployed agent (pgvector) strictly better on this case than
+the CI gate's agent (bm25, no database in CI). That gap is deliberate and
+documented in the README: the gate scores trajectory shape, which is
+backend-independent, and both backends pass `rag/test_retriever.py`.
 
 ## Reproduce
 

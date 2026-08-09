@@ -36,7 +36,7 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from agent.memory import Memory
 from agent.providers import get_provider, tools_for
 from agent.tracing import get_tracer, tracing_enabled
-from rag.retriever import Retriever
+from rag.retriever import get_retriever
 
 _SERVER = str(Path(__file__).parent.parent / "mcp_server" / "server.py")
 
@@ -131,7 +131,9 @@ class Harness:
         load_dotenv()
         self.provider = get_provider(provider_name)
         self.tools = tools_for(self.provider.name)
-        self.retriever = Retriever()
+        # bm25 locally and in CI, pgvector in the deployed agent — same contract
+        # either way, selected by $RETRIEVAL_BACKEND (§2.6.2).
+        self.retriever = get_retriever()
         # Loaded once so the gate can resolve an order_id -> owning customer without
         # a round-trip. This mirrors the server's ORDERS; in a real system the gate
         # would consult the same ownership source of truth the tools do.
