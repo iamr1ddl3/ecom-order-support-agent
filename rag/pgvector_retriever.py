@@ -116,21 +116,35 @@ class PgVectorRetriever:
         cutoff = self.max_distance if max_distance is None else max_distance
         vec = embed([query])[0]
 
-        with self.conn.cursor() as cur:
-            # <=> is pgvector's cosine distance operator. Filtering in SQL rather
-            # than in Python keeps the work in the database, which is the point of
-            # storing the vectors there.
-            cur.execute(
-                """
-                SELECT doc_id, text, embedding <=> %s::vector AS distance
-                FROM policy_docs
-                WHERE embedding <=> %s::vector <= %s
-                ORDER BY distance
-                LIMIT %s
-                """,
-                (vec, vec, cutoff, k),
-            )
-            rows = cur.fetchall()
+        try:
+            with self.conn.cursor() as cur:
+                # <=> is pgvector's cosine distance operator. Filtering in SQL rather
+                # than in Python keeps the work in the database, which is the point of
+                # storing the vectors there.
+                cur.execute(
+                    """
+                    SELECT doc_id, text, embedding <=> %s::vector AS distance
+                    FROM policy_docs
+                    WHERE embedding <=> %s::vector <= %s
+                    ORDER BY distance
+                    LIMIT %s
+                    """,
+                    (vec, vec, cutoff, k),
+                )
+                rows = cur.fetchall()
+        except Exception:
+            # Roll back before re-raising. The connection is long-lived (one per
+            # process), and psycopg leaves a failed transaction open: every later
+            # query then dies with "current transaction is aborted, commands
+            # ignored until end of transaction block". Without this, ONE transient
+            # error takes retrieval down permanently until the task restarts —
+            # the original failure is long gone and every trace points at the
+            # wrong thing.
+            try:
+                self.conn.rollback()
+            except Exception:
+                self._conn = None  # unusable connection; reconnect on next call
+            raise
 
         # Return similarity, not raw distance, so higher stays better for every
         # caller — the harness prints this as `score=`.

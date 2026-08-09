@@ -70,22 +70,18 @@ Parameters:
     Default: 50
 
 Resources:
-  # --- Registry ------------------------------------------------------------
-  EcrRepo:
-    Type: AWS::ECR::Repository
-    # Retain so a stack delete can't fail on a non-empty repository; teardown.sh
-    # empties and removes it explicitly, in the right order.
-    DeletionPolicy: Retain
-    Properties:
-      RepositoryName: !Ref ProjectName
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      LifecyclePolicy:
-        # SHA-tagged images accumulate on every push; keep the last 10.
-        LifecyclePolicyText: |
-          {"rules":[{"rulePriority":1,"description":"keep last 10",
-           "selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},
-           "action":{"type":"expire"}}]}
+  # The ECR repository is deliberately NOT declared here.
+  #
+  # It cannot be: the image has to exist in the registry before this stack can
+  # create a service that runs it, so the repo is created and pushed to by
+  # infra/deploy.sh (and by the GitHub Actions deploy job) BEFORE the stack is
+  # deployed. Declaring it here as well makes CloudFormation refuse the
+  # changeset with AWS::EarlyValidation::ResourceExistenceCheck, because the
+  # resource already exists.
+  #
+  # It stays out of the stack's lifecycle entirely, which also means a stack
+  # delete can't fail on a non-empty repository. infra/teardown.sh removes it
+  # explicitly, emptying it first.
 
   # --- Security groups -----------------------------------------------------
   # Three groups, chained: internet -> ALB -> task -> database. Each tier admits
@@ -218,8 +214,9 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
   TaskRole:
-    # The application's own identity. Empty on purpose: the agent calls no AWS
-    # APIs, so it gets no AWS permissions.
+    # The application's own identity. The agent itself calls no AWS APIs; the
+    # only permissions here are the SSM channel ECS Exec needs, which is how the
+    # pgvector index gets seeded (RDS is unreachable from outside the VPC).
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -228,6 +225,18 @@ Resources:
           - Effect: Allow
             Principal: {Service: ecs-tasks.amazonaws.com}
             Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ecs-exec-ssm-channel
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Resource: "*"
 
   Cluster:
     Type: AWS::ECS::Cluster
@@ -286,6 +295,10 @@ Resources:
       TaskDefinition: !Ref TaskDefinition
       DesiredCount: !Ref DesiredCount
       LaunchType: FARGATE
+      # Required to seed the pgvector index after deploy. RDS is deliberately
+      # not publicly accessible, so the index has to be built from inside the
+      # task — there is no network route to the database from anywhere else.
+      EnableExecuteCommand: true
       NetworkConfiguration:
         AwsvpcConfiguration:
           # Public IP so the task can reach the LLM API and pull from ECR without
@@ -343,5 +356,3 @@ Outputs:
     Value: !GetAtt Database.Endpoint.Address
   DBIdentifier:
     Value: !Ref Database
-  EcrRepoUri:
-    Value: !GetAtt EcrRepo.RepositoryUri
