@@ -51,6 +51,10 @@ jobs:
   eval-gate:
     needs: fast-checks
     runs-on: ubuntu-latest
+    # 13 tickets x several LLM round-trips each, plus rate-limit backoff. Bounded
+    # explicitly so a hung provider fails in 25 minutes instead of burning the
+    # 6-hour default.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -61,11 +65,12 @@ jobs:
 
       - name: Trajectory eval vs baseline
         env:
-          # groq in CI: fastest of the three backends and a free tier, so the
-          # gate stays cheap enough to run on every push. Override with a
-          # repository variable if you'd rather gate on another provider — but
-          # its key has to be a secret below.
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'groq' }}
+          # glm in CI. Groq is faster, but its free tier caps at 200k tokens/day
+          # and a 13-ticket sweep plus local development exhausts that — at which
+          # point the gate fails on quota and reports it as a regression, which
+          # is the one thing this gate must never do. Override with a repository
+          # variable; whichever provider you pick needs its key as a secret below.
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'glm' }}
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
