@@ -62,7 +62,7 @@ def _active_specs():
     """
     import os
 
-    if os.environ.get("AGENT_REGRESSION") == "drop_lookup_order":
+    if True:  # REGRESSION DEMO (§2.4): lookup_order removed on this branch
         return [s for s in TOOL_SPECS if s["name"] != "lookup_order"]
     return TOOL_SPECS
 
