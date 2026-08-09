@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 from dataclasses import dataclass, field
 
 from .tools_schema import tools_by_provider
@@ -45,6 +47,33 @@ OPENAI_COMPATIBLE = {
 }
 
 DEFAULT_MODELS = {"anthropic": "claude-sonnet-4-5"}
+
+
+def _with_retry(call, attempts: int = 5):
+    """Retry a provider call on rate limits, honouring the server's own wait hint.
+
+    Free tiers are token-per-minute capped (Groq's is 8k TPM), and a 13-ticket
+    eval sweep exceeds that comfortably. Without this, a 429 surfaces as a failed
+    ticket and the regression gate reports "regression" for what is really a
+    quota pause — a gate that is red for the wrong reason is one people learn to
+    ignore, which is the failure §2.4 exists to prevent.
+
+    Sleeps for the interval the error names when it gives one (Groq and Anthropic
+    both do), otherwise backs off exponentially. Retries only rate limits;
+    everything else is a real error and is raised immediately.
+    """
+    for attempt in range(attempts):
+        try:
+            return call()
+        except Exception as exc:
+            is_rate_limit = type(exc).__name__ == "RateLimitError" or "429" in str(exc)
+            if not is_rate_limit or attempt == attempts - 1:
+                raise
+            match = re.search(r"try again in ([\d.]+)s", str(exc))
+            delay = float(match.group(1)) + 0.5 if match else 2.0 * (2 ** attempt)
+            print(f"  [PROVIDER] rate limited, retrying in {delay:.1f}s "
+                  f"(attempt {attempt + 1}/{attempts})")
+            time.sleep(delay)
 
 
 @dataclass
@@ -76,12 +105,14 @@ class AnthropicProvider:
         self._model = model or DEFAULT_MODELS["anthropic"]
 
     def create(self, system: str, messages: list, tools: list) -> Response:
-        resp = self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            system=system,
-            messages=messages,
-            tools=tools or [],
+        resp = _with_retry(
+            lambda: self._client.messages.create(
+                model=self._model,
+                max_tokens=1024,
+                system=system,
+                messages=messages,
+                tools=tools or [],
+            )
         )
         text = "".join(b.text for b in resp.content if b.type == "text")
         tool_calls = [
@@ -120,11 +151,13 @@ class OpenAICompatibleProvider:
 
     def create(self, system: str, messages: list, tools: list) -> Response:
         full = [{"role": "system", "content": system}, *messages]
-        resp = self._client.chat.completions.create(
-            model=self._model,
-            max_tokens=1024,
-            messages=full,
-            tools=tools or None,  # empty list is rejected; None means "no tools"
+        resp = _with_retry(
+            lambda: self._client.chat.completions.create(
+                model=self._model,
+                max_tokens=1024,
+                messages=full,
+                tools=tools or None,  # empty list is rejected; None means "no tools"
+            )
         )
         msg = resp.choices[0].message
         raw_calls = msg.tool_calls or []

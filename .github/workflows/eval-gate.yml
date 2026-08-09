@@ -45,6 +45,8 @@ jobs:
         run: python -m mcp_server.test_server
       - name: Trajectory scorer rejects bad trajectories
         run: python -m eval.test_check
+      - name: Rate-limit retry (a 429 must not read as a regression)
+        run: python -m agent.test_retry
 
   eval-gate:
     needs: fast-checks
