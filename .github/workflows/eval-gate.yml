@@ -59,7 +59,11 @@ jobs:
 
       - name: Trajectory eval vs baseline
         env:
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'glm' }}
+          # groq in CI: fastest of the three backends and a free tier, so the
+          # gate stays cheap enough to run on every push. Override with a
+          # repository variable if you'd rather gate on another provider — but
+          # its key has to be a secret below.
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'groq' }}
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
