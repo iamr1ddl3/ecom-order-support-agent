@@ -19,6 +19,7 @@ name: eval-gate
 on:
   push:
   pull_request:
+  workflow_dispatch:   # re-run the gate on demand, e.g. after a quota reset
 
 permissions:
   contents: read
@@ -29,9 +30,13 @@ jobs:
     # real signal. Also catches the case where the scorer itself is broken, which
     # would otherwise show up as a suspiciously green eval.
     runs-on: ubuntu-latest
+    env:
+      # Third-party warning from mcp[cli]'s pydantic-settings, emitted on every
+      # MCP subprocess start. Not ours, not an error, and it buries real output.
+      PYTHONWARNINGS: "ignore::UserWarning"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -56,8 +61,8 @@ jobs:
     # 6-hour default.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -80,5 +85,9 @@ jobs:
           RETRIEVAL_BACKEND: bm25
           # Tracing off: no LangFuse keys in CI. agent/tracing.py no-ops cleanly.
           LANGFUSE_TRACING_ENABLED: "false"
+          # Silence a pydantic-settings warning emitted by the mcp[cli] dependency
+          # on every MCP subprocess start — 13 tickets means 13+ copies burying the
+          # actual eval output. Third-party noise, not ours, and not an error.
+          PYTHONWARNINGS: "ignore::UserWarning"
         # Non-zero exit from the script fails the job. No threshold logic here.
         run: python -m eval.trajectory_eval
