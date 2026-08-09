@@ -52,7 +52,29 @@ def demo() -> None:
     assert attempts["n"] == 1, f"a real error must not be retried, got {attempts['n']} attempts"
     print("[ok] a non-rate-limit error raises immediately, no retry")
 
-    # 4. gives up rather than looping forever
+    # 4. parses BOTH wait formats the same provider emits
+    assert abs(providers._retry_after("try again in 7.08s") - 7.58) < 0.01
+    parsed = providers._retry_after("Please try again in 4m42.528s.")
+    assert abs(parsed - 283.03) < 0.01, f"4m42.528s should parse to ~282.5s, got {parsed}"
+    assert providers._retry_after("no hint here") is None
+    print(f"[ok] parsed '4m42.528s' as {parsed:.1f}s (the minutes form, not just seconds)")
+
+    # 5. an exhausted daily quota raises instead of sleeping CI out for minutes
+    quota = {"n": 0}
+
+    def daily_limit():
+        quota["n"] += 1
+        raise RateLimitError("429 tokens per day (TPD): Limit 200000. Please try again in 4m42.528s")
+
+    try:
+        providers._with_retry(daily_limit)
+        raise AssertionError("should have raised on an exhausted daily quota")
+    except RateLimitError:
+        pass
+    assert quota["n"] == 1, f"a multi-minute wait must not be slept through, got {quota['n']} attempts"
+    print("[ok] a daily-quota 429 raises immediately rather than hanging CI")
+
+    # 6. gives up rather than looping forever
     forever = {"n": 0}
 
     def always_limited():

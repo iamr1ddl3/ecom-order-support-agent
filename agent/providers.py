@@ -49,6 +49,28 @@ OPENAI_COMPATIBLE = {
 DEFAULT_MODELS = {"anthropic": "claude-sonnet-4-5"}
 
 
+# Longest pause worth sleeping through inside a retry. Above this it isn't a
+# burst limit, it's an exhausted quota, and blocking CI for minutes to fail
+# anyway is worse than reporting it.
+MAX_RETRY_WAIT = 90.0
+
+
+def _retry_after(message: str) -> float | None:
+    """Seconds the provider asked us to wait, or None if it didn't say.
+
+    Providers write this several ways — Groq alone emits both "try again in
+    7.08s" and "try again in 4m42.528s". Parsing only the first form (as this
+    originally did) silently discards the hint for the minutes-long case and
+    falls back to a 2s backoff against a quota that needs four minutes.
+    """
+    match = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", message)
+    if match:
+        minutes = float(match.group(1) or 0)
+        return minutes * 60 + float(match.group(2)) + 0.5
+    match = re.search(r"retry[- ]after[\"']?[:=]\s*[\"']?([\d.]+)", message, re.IGNORECASE)
+    return float(match.group(1)) + 0.5 if match else None
+
+
 def _with_retry(call, attempts: int = 5):
     """Retry a provider call on rate limits, honouring the server's own wait hint.
 
@@ -69,8 +91,15 @@ def _with_retry(call, attempts: int = 5):
             is_rate_limit = type(exc).__name__ == "RateLimitError" or "429" in str(exc)
             if not is_rate_limit or attempt == attempts - 1:
                 raise
-            match = re.search(r"try again in ([\d.]+)s", str(exc))
-            delay = float(match.group(1)) + 0.5 if match else 2.0 * (2 ** attempt)
+            delay = _retry_after(str(exc))
+            if delay is None:
+                delay = 2.0 * (2 ** attempt)
+            elif delay > MAX_RETRY_WAIT:
+                # A multi-minute wait means a daily/hourly quota, not a
+                # per-minute burst. Sleeping it out would hang CI for minutes and
+                # still fail; surfacing it immediately is the honest outcome.
+                print(f"  [PROVIDER] rate limited for {delay:.0f}s — quota exhausted, not a burst")
+                raise
             print(f"  [PROVIDER] rate limited, retrying in {delay:.1f}s "
                   f"(attempt {attempt + 1}/{attempts})")
             time.sleep(delay)
