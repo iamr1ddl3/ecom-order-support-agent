@@ -134,7 +134,18 @@ def main() -> int:
     args = ap.parse_args()
 
     print(f"Running trajectory eval over {len(load_tickets())} tickets...\n")
-    results = run(args.provider)
+    try:
+        results = run(args.provider)
+    except Exception as exc:
+        # A gate that can't build the agent hasn't measured anything. Exiting 1
+        # here would report "regression" for what is actually a missing API key,
+        # and a gate that is red for the wrong reason teaches people to ignore it.
+        # Exit 2 = misconfigured, distinct from exit 1 = real regression.
+        print(f"\nCOULD NOT RUN THE EVAL: {type(exc).__name__}: {exc}")
+        print("This is a setup failure, not a regression — no score was measured.\n"
+              "Check that the provider API key for $LLM_PROVIDER is set "
+              "(locally in .env, in CI as a repo secret).")
+        return 2
     rate = pass_rate(results)
     passed = sum(r.passed for r in results)
 
