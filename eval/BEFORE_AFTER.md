@@ -1,4 +1,39 @@
-# Before/after report (§2.5)
+# Before/after report (§2.5) — and the gate blocking it live (§2.4)
+
+## The gate blocked a real regressed version in a real Actions run
+
+Not a described gate. Branch `regression-demo` removes `lookup_order` from the
+offered tools and was pushed through the real pipeline:
+
+| Run | Branch | Result |
+|---|---|---|
+| [31296187273](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296187273) | `assignment-2` | **success** — 13/13, 100.0%, gate PASS |
+| [31296404885](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296404885) | `regression-demo` | **failure** — 8/13, 61.5%, gate FAIL |
+
+```
+[T01] FAIL  order_status   ['tool:check_account_status']
+[T02] FAIL  order_status   ['tool:check_account_status']
+[T03] FAIL  order_status   ['retrieval:subscription_cancellation', 'tool:check_account_status']
+[T06] FAIL  delivery_issue ['tool:check_account_status']
+[T12] FAIL  order_status   ['tool:check_account_status']
+
+Pass rate: 61.5%  (8/13 tickets)
+Baseline:  100.0%
+Delta:     -38.5 points (gate fails below -10)
+REGRESSION GATE: FAIL — dropped 38.5 points, limit is 10.
+Failing tickets: ['T01', 'T02', 'T03', 'T06', 'T12']
+```
+
+CI reproduced the local before/after figure exactly — same rate, same five
+tickets — which is the useful property: the gate isn't measuring runner
+conditions, it's measuring the agent.
+
+`regression-demo` is deliberately broken and is **not for merge**. It exists so
+the failing run is real and clickable.
+
+---
+
+# The local report
 
 ```bash
 python -m eval.before_after --provider groq

@@ -271,9 +271,27 @@ the trajectory eval. **The pass/fail logic is in the Python, not the YAML** (§7
 CI just runs the script and uses its exit code.
 
 ```bash
-python -m eval.trajectory_eval; echo $?                              # 0
+python -m eval.trajectory_eval; echo $?                                     # 0
 AGENT_REGRESSION=drop_lookup_order python -m eval.trajectory_eval; echo $?  # 1
 ```
+
+Exit codes are three-valued so the gate can't lie about why it's red:
+**0** clean · **1** measured regression · **2** setup failure (no API key, etc).
+That distinction exists because the first CI runs failed on a missing secret and
+then on an exhausted provider quota, both reported as "regression" — and a gate
+that goes red for the wrong reason is one people learn to ignore.
+
+### Watched blocking a real regressed version (§2.4)
+
+| Run | Branch | Result |
+|---|---|---|
+| [31296187273](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296187273) | `assignment-2` | **success** — 13/13, gate PASS |
+| [31296404885](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296404885) | `regression-demo` | **failure** — 8/13, −38.5 points, gate FAIL |
+
+Branch `regression-demo` removes `lookup_order` from the offered tools and is
+deliberately not for merge. CI reproduced the local before/after figure exactly
+— same 61.5%, same five tickets — so the gate is measuring the agent, not the
+runner.
 
 ## 6. Before/after (§2.5) — `eval/BEFORE_AFTER.md`
 
