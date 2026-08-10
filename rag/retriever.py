@@ -23,6 +23,7 @@ doc set — see test_retriever.py for the sanity check that guards it.
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -93,3 +94,21 @@ class Retriever:
         scored = [(doc_id, self._bm25(q_terms, doc_id), self.docs[doc_id]) for doc_id in self.docs]
         scored.sort(key=lambda s: s[1], reverse=True)
         return [s for s in scored[:k] if s[1] >= min_score]
+
+
+def get_retriever(backend: str | None = None):
+    """Return the retrieval backend named by $RETRIEVAL_BACKEND (§2.6.2).
+
+    'pgvector' is what the deployed agent runs; 'bm25' keeps local development
+    and CI working with no database. Both satisfy the same
+    `retrieve(query, k) -> [(doc_id, score, text)]` contract, which is why the
+    harness needs no knowledge of which one it holds.
+    """
+    backend = (backend or os.environ.get("RETRIEVAL_BACKEND") or "bm25").lower()
+    if backend == "pgvector":
+        from rag.pgvector_retriever import PgVectorRetriever
+
+        return PgVectorRetriever()
+    if backend == "bm25":
+        return Retriever()
+    raise ValueError(f"Unknown RETRIEVAL_BACKEND '{backend}'. Choose 'bm25' or 'pgvector'.")
