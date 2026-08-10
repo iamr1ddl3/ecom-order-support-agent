@@ -122,6 +122,11 @@ class Response:
     stop_reason: str  # "tool_use" | "end_turn"
     tool_calls: list[ToolCall] = field(default_factory=list)
     raw: object = None  # provider-native object, kept so append_*_turn can replay it
+    # {"input": n, "output": n} — normalized here rather than dug out of `raw`
+    # downstream, because `raw` is a different shape per provider (Anthropic
+    # stores the whole response, the OpenAI path stores just the message, which
+    # carries no usage at all). Tracing reads this.
+    usage: dict = field(default_factory=dict)
 
 
 class AnthropicProvider:
@@ -149,7 +154,10 @@ class AnthropicProvider:
             for b in resp.content
             if b.type == "tool_use"
         ]
-        return Response(text=text, stop_reason=resp.stop_reason, tool_calls=tool_calls, raw=resp)
+        u = getattr(resp, "usage", None)
+        usage = {"input": u.input_tokens, "output": u.output_tokens} if u else {}
+        return Response(text=text, stop_reason=resp.stop_reason, tool_calls=tool_calls,
+                        raw=resp, usage=usage)
 
     def append_assistant_turn(self, messages: list, response: Response) -> None:
         # Replay the assistant's exact content blocks (text + tool_use) so the next
@@ -197,7 +205,13 @@ class OpenAICompatibleProvider:
             for c in raw_calls
         ]
         stop_reason = "tool_use" if tool_calls else "end_turn"
-        return Response(text=msg.content or "", stop_reason=stop_reason, tool_calls=tool_calls, raw=msg)
+        # Usage lives on the response, not the message — and `raw` below is the
+        # MESSAGE (append_assistant_turn needs it), so it has to be read here or
+        # it's lost.
+        u = getattr(resp, "usage", None)
+        usage = {"input": u.prompt_tokens, "output": u.completion_tokens} if u else {}
+        return Response(text=msg.content or "", stop_reason=stop_reason,
+                        tool_calls=tool_calls, raw=msg, usage=usage)
 
     def append_assistant_turn(self, messages: list, response: Response) -> None:
         entry = {"role": "assistant", "content": response.text or None}
@@ -247,14 +261,12 @@ def _trace_create(provider):
                 output=resp.text or [{"tool": tc.name, "input": tc.input} for tc in resp.tool_calls],
                 metadata={"stop_reason": resp.stop_reason},
             )
-            # Token counts live in different places per SDK shape; report them when
-            # the provider exposes them rather than guessing a common field.
-            usage = getattr(resp.raw, "usage", None)
-            if usage is not None:
-                gen.update(usage_details={
-                    "input": getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", 0),
-                    "output": getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", 0),
-                })
+            # Read the normalized field, not resp.raw: `raw` holds the full
+            # response for Anthropic but only the message for the OpenAI-shaped
+            # providers, and a message carries no usage — so this silently
+            # reported zero tokens for Groq and GLM.
+            if resp.usage:
+                gen.update(usage_details=resp.usage)
             return resp
 
     provider.create = create
