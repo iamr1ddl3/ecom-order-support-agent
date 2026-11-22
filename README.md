@@ -1,7 +1,3 @@
-
-
-https://github.com/user-attachments/assets/104b7a98-7fb1-4dbc-8608-64599523628a
-
 # eCom Order Support Agent — Harness, Tools & Grounding
 
 [![eval-gate](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/workflows/eval-gate.yml/badge.svg)](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/workflows/eval-gate.yml)
@@ -33,6 +29,8 @@ so honestly when no doc covers the question).
 | **Evaluation** | 13-ticket trajectory eval (baseline 100%) · LLM-as-judge (mean 6.82/10) · CI gate at −10 points |
 | **Interfaces** | CLI (`main.py`) · HTTP API (`app.py`: `/health`, `/ready`, `/chat`) |
 | **Deployment** | Docker → ECS Fargate behind an ALB, RDS Postgres + pgvector, GitHub OIDC (no static keys) |
+
+https://github.com/user-attachments/assets/104b7a98-7fb1-4dbc-8608-64599523628a
 
 ### Architecture
 
