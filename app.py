@@ -210,6 +210,12 @@ def index() -> FileResponse:
     return FileResponse(_STATIC / "index.html")
 
 
+@app.get("/how-it-works", include_in_schema=False)
+def how_it_works() -> FileResponse:
+    """A walkthrough of the agent for visitors: the steps, the gate, the cutoff."""
+    return FileResponse(_STATIC / "how-it-works.html")
+
+
 @app.get("/api/customers")
 def customers() -> list[dict]:
     """Demo customers for the page's picker. Mock data only."""
