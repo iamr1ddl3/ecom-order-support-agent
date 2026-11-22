@@ -1,6 +1,6 @@
 """
-Provider abstraction — one interface, three backends (Anthropic Claude, Groq,
-and GLM via Z.ai).
+Provider abstraction — one interface, four backends (Anthropic Claude, Groq,
+GLM via Z.ai, and OpenRouter).
 
 Assignment §7 asks for exactly this: "isolate [the LLM] behind a small provider
 abstraction (one function that takes a system prompt, messages, and tools, and
@@ -8,7 +8,7 @@ returns a normalized response)." Everything above this file (harness, RAG demos)
 talks to a `Provider` and never imports a vendor SDK directly, so swapping
 providers is a one-env-var change, not a code change scattered everywhere.
 
-Two request/response shapes, not three: Groq and GLM are both OpenAI-compatible,
+Two request/response shapes, not four: Groq, GLM and OpenRouter are all OpenAI-compatible,
 so they share ONE class (OpenAICompatibleProvider) differing only in base_url,
 model, and env key — that's the whole payoff of the abstraction. Anthropic has
 its own shape and its own class. The differences the class hides:
@@ -43,6 +43,14 @@ OPENAI_COMPATIBLE = {
         "base_url": "https://api.z.ai/api/paas/v4",
         "key_env": "ZAI_API_KEY",
         "default_model": "glm-4.6",
+    },
+    # OpenRouter: one key, many vendors (Anthropic, OpenAI, Google, ...), all
+    # behind the same OpenAI wire format. Pick the model with LLM_MODEL, e.g.
+    # "anthropic/claude-sonnet-4.5" or "openai/gpt-4.1".
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "default_model": "anthropic/claude-sonnet-4.5",
     },
 }
 
@@ -136,7 +144,7 @@ class AnthropicProvider:
         import anthropic  # imported lazily so a Groq-only user needs no anthropic key
 
         self._client = anthropic.Anthropic()
-        self._model = model or DEFAULT_MODELS["anthropic"]
+        self._model = model or os.environ.get("LLM_MODEL") or DEFAULT_MODELS["anthropic"]
 
     def create(self, system: str, messages: list, tools: list) -> Response:
         resp = _with_retry(
@@ -175,7 +183,7 @@ class AnthropicProvider:
 
 
 class OpenAICompatibleProvider:
-    """Groq and GLM (Z.ai): same OpenAI wire format, different base_url + key.
+    """Groq, GLM (Z.ai) and OpenRouter: same OpenAI wire format, different base_url + key.
     One class serves both — the point of the abstraction."""
 
     def __init__(self, name: str, model: str | None = None):
@@ -184,7 +192,7 @@ class OpenAICompatibleProvider:
         cfg = OPENAI_COMPATIBLE[name]
         self.name = name
         self._client = OpenAI(base_url=cfg["base_url"], api_key=os.environ.get(cfg["key_env"]))
-        self._model = model or cfg["default_model"]
+        self._model = model or os.environ.get("LLM_MODEL") or cfg["default_model"]
 
     def create(self, system: str, messages: list, tools: list) -> Response:
         full = [{"role": "system", "content": system}, *messages]
@@ -231,7 +239,9 @@ class OpenAICompatibleProvider:
             messages.append({"role": "tool", "tool_call_id": tc_id, "content": str(result)})
 
 
-_VALID = {"anthropic", "groq", "glm"}
+# Single source of truth for the CLI --provider choices too.
+PROVIDERS = ["anthropic", *OPENAI_COMPATIBLE]
+_VALID = set(PROVIDERS)
 
 
 def _trace_create(provider):

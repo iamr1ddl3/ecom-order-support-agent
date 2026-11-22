@@ -16,6 +16,7 @@ import argparse
 from dotenv import load_dotenv
 
 from agent.harness import Harness, Ticket
+from agent.providers import PROVIDERS
 from scenarios import SCENARIOS
 
 load_dotenv()
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="E-commerce order-support agent.")
     parser.add_argument("--demo", action="store_true", help="run the 5 canned scenarios")
     parser.add_argument("--customer", help="customer ID for interactive chat, e.g. cust_1001")
-    parser.add_argument("--provider", choices=["anthropic", "groq", "glm"], default=None,
+    parser.add_argument("--provider", choices=PROVIDERS, default=None,
                         help="LLM provider (default: $LLM_PROVIDER or anthropic)")
     args = parser.parse_args()
 

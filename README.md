@@ -39,6 +39,8 @@ cp .env.example .env
 #   ANTHROPIC_API_KEY=...     (and set LLM_PROVIDER=anthropic)
 #   GROQ_API_KEY=...          (and set LLM_PROVIDER=groq)
 #   ZAI_API_KEY=...           (and set LLM_PROVIDER=glm)
+#   OPENROUTER_API_KEY=...    (and set LLM_PROVIDER=openrouter; optional
+#                              LLM_MODEL=anthropic/claude-sonnet-4.5 or openai/gpt-4.1)
 ```
 
 ## How to run it
@@ -57,7 +59,7 @@ python main.py --customer cust_1001
 ```
 
 Valid demo customers: `cust_1001`, `cust_2002`, `cust_3003`, `cust_4004`.
-Add `--provider groq` / `--provider glm` (or set `LLM_PROVIDER`) to switch backend.
+Add `--provider groq` / `--provider glm` / `--provider openrouter` (or set `LLM_PROVIDER`) to switch backend.
 
 Every run prints, on screen:
 - `[RETRIEVER] used chunk: <doc> (score=...)` — which policy doc grounded the answer,
