@@ -25,16 +25,18 @@ import asyncio
 import os
 import re
 import sys
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from agent.memory import Memory
 from agent.providers import get_provider, tools_for
-from rag.retriever import Retriever
+from agent.tracing import get_tracer, tracing_enabled
+from rag.retriever import get_retriever
 
 _SERVER = str(Path(__file__).parent.parent / "mcp_server" / "server.py")
 
@@ -59,10 +61,45 @@ say so honestly and offer to escalate rather than guessing.
 {prior_tickets}{policy_context}"""
 
 
+@contextmanager
+def _observe(as_type: str, name: str, **kwargs):
+    """Open a LangFuse observation, or yield None when tracing is off.
+
+    Yielding None (rather than a dummy object) keeps the untraced path free of
+    any SDK import at all, so the agent runs with no LangFuse installed. Callers
+    guard with `if span is not None`.
+    """
+    if not tracing_enabled():
+        yield None
+        return
+    with get_tracer().start_as_current_observation(as_type=as_type, name=name, **kwargs) as span:
+        yield span
+
+
 @dataclass
 class GateDecision:
     allowed: bool
     reason: str
+
+
+@dataclass
+class Step:
+    """One thing the agent did, in order. `kind` is 'retrieval' or 'tool'.
+
+    `name` is the doc_id for a retrieval and the tool name for a tool call, so a
+    required_steps entry in the eval set reads as e.g. 'tool:lookup_order' or
+    'retrieval:refund_window'. `allowed` is None for retrievals (the gate only
+    governs tool calls); for tool calls it records whether the gate let it run —
+    which is what makes a DENY visible to the trajectory eval instead of looking
+    like the call never happened.
+    """
+    kind: str
+    name: str
+    allowed: bool | None = None
+    detail: str = ""
+
+    def key(self) -> str:
+        return f"{self.kind}:{self.name}"
 
 
 class Ticket:
@@ -76,13 +113,27 @@ class Ticket:
         self.customer_id = customer_id
         self.ticket_type = ticket_type
         self.memory = Memory(customer_id)
+        # Ordered record of what the agent actually DID this ticket — the
+        # trajectory the §2.2 eval scores. Captured as data rather than scraped
+        # back out of the [GATE]/[RETRIEVER] prints, because a stdout parser
+        # fails silently the moment a print is reworded.
+        self.steps: list[Step] = []
 
 
 class Harness:
     def __init__(self, provider_name: str | None = None):
+        # Load .env here, not just in main.py: the eval, judge, before/after and
+        # HTTP entry points all construct a Harness, and every one of them needs
+        # the provider key. It also has to happen before the MCP subprocess is
+        # spawned, since that inherits os.environ (see _converse_inner).
+        # load_dotenv does not override real environment variables, so CI and ECS
+        # (which inject config directly) are unaffected.
+        load_dotenv()
         self.provider = get_provider(provider_name)
         self.tools = tools_for(self.provider.name)
-        self.retriever = Retriever()
+        # bm25 locally and in CI, pgvector in the deployed agent — same contract
+        # either way, selected by $RETRIEVAL_BACKEND (§2.6.2).
+        self.retriever = get_retriever()
         # Loaded once so the gate can resolve an order_id -> owning customer without
         # a round-trip. This mirrors the server's ORDERS; in a real system the gate
         # would consult the same ownership source of truth the tools do.
@@ -136,15 +187,28 @@ class Harness:
             return "subscription_account"
         return "order_status"
 
-    def _retrieve_policy(self, message: str) -> tuple[str, list]:
+    def _retrieve_policy(self, ticket: Ticket, message: str) -> tuple[str, list]:
         """Returns (context_block, hits). Empty hits => honest gap; the context
         block tells the model to say so instead of guessing."""
-        hits = self.retriever.retrieve(message, k=2)
-        if hits:
+        with _observe("retriever", "retrieve-policy", input={"query": message}) as span:
+            # AGENT_REGRESSION=no_retrieval (§2.4): break the retrieval step so
+            # policy answers become ungrounded recollection. The model still
+            # answers confidently; only the trajectory shows nothing was retrieved.
+            if os.environ.get("AGENT_REGRESSION") == "no_retrieval":
+                hits = []
+            else:
+                hits = self.retriever.retrieve(message, k=2)
             for doc_id, score, _ in hits:
                 print(f"  [RETRIEVER] used chunk: {doc_id} (score={score:.2f})")
+                ticket.steps.append(Step("retrieval", doc_id, detail=f"score={score:.2f}"))
+            if span is not None:
+                span.update(output=[{"doc_id": d, "score": s} for d, s, _ in hits])
+
+        if hits:
             context = "\n\n".join(f"[{doc_id}] {text}" for doc_id, _, text in hits)
             return f"\n\nRetrieved policy context:\n{context}", hits
+        # No Step recorded for a gap: nothing was retrieved. The eval asserts the
+        # ABSENCE of retrieval steps for the honest-gap ticket.
         print("  [RETRIEVER] no policy doc cleared the coverage threshold — honest gap")
         return "\n\nRetrieved policy context:\n(no policy doc covers this question)", hits
 
@@ -155,20 +219,54 @@ class Harness:
         result, so the model sees the refusal and can respond to the customer."""
         results = {}
         for tc in response.tool_calls:
-            decision = self._permission_gate(ticket, tc.name, tc.input)
-            print(f"  [GATE] {tc.name}({tc.input}) -> {'ALLOW' if decision.allowed else 'DENY'}: {decision.reason}")
-            if not decision.allowed:
-                results[tc.id] = f"REJECTED by harness: {decision.reason}"
-                continue
-            # Only reached for allowed calls — dispatch to the scoped MCP server.
-            mcp_result = await session.call_tool(tc.name, tc.input)
-            text = " ".join(b.text for b in mcp_result.content if getattr(b, "text", None))
-            results[tc.id] = text or str(mcp_result.content)
+            # One span per proposed call, opened BEFORE the gate runs, so a denied
+            # call is visible in the trace as an attempt that was blocked — not as
+            # a call that silently never happened.
+            with _observe("tool", tc.name, input=tc.input) as span:
+                decision = self._permission_gate(ticket, tc.name, tc.input)
+                print(f"  [GATE] {tc.name}({tc.input}) -> {'ALLOW' if decision.allowed else 'DENY'}: {decision.reason}")
+                ticket.steps.append(Step("tool", tc.name, allowed=decision.allowed, detail=decision.reason))
+                if span is not None:
+                    span.update(metadata={"gate": "ALLOW" if decision.allowed else "DENY",
+                                          "gate_reason": decision.reason})
+
+                if not decision.allowed:
+                    results[tc.id] = f"REJECTED by harness: {decision.reason}"
+                    if span is not None:
+                        span.update(output=results[tc.id])
+                    continue
+
+                # Only reached for allowed calls — dispatch to the scoped MCP server.
+                mcp_result = await session.call_tool(tc.name, tc.input)
+                text = " ".join(b.text for b in mcp_result.content if getattr(b, "text", None))
+                results[tc.id] = text or str(mcp_result.content)
+                if span is not None:
+                    span.update(output=results[tc.id])
         return results
 
     async def _converse(self, ticket: Ticket, user_message: str) -> str:
+        # Root span, one per turn. Input is set EXPLICITLY: an @observe decorator
+        # here would capture every argument, including `self` (which holds a live
+        # provider API client) and the whole Ticket object.
+        with _observe(
+            "span",
+            "ticket-turn",
+            input={"customer_id": ticket.customer_id, "message": user_message},
+        ) as root:
+            reply = await self._converse_inner(ticket, user_message)
+            if root is not None:
+                root.update(
+                    output=reply,
+                    metadata={
+                        "ticket_type": ticket.ticket_type,
+                        "trajectory": [s.key() for s in ticket.steps],
+                    },
+                )
+            return reply
+
+    async def _converse_inner(self, ticket: Ticket, user_message: str) -> str:
         ticket.ticket_type = self.classify(user_message)
-        policy_context, _ = self._retrieve_policy(user_message)
+        policy_context, _ = self._retrieve_policy(ticket, user_message)
         system = _SYSTEM_PROMPT.format(
             customer_id=ticket.customer_id,
             prior_tickets=(f"This customer's prior tickets:\n{ticket.memory.prior_tickets_summary()}"

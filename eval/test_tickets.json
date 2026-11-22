@@ -1,0 +1,129 @@
+{
+  "_comment": [
+    "Fixed test-ticket set for the §2.2 trajectory eval. Stored as data, not inline",
+    "in the eval script, because the §2.4 CI gate and the §2.5 before/after report",
+    "reuse this exact set (§7).",
+    "",
+    "required_steps: what the trajectory MUST contain for this ticket type, as",
+    "'<kind>:<name>' keys matching agent.harness.Step.key(). The check is a SUPERSET",
+    "test — extra steps are fine, missing ones fail. This is what scores the PATH",
+    "rather than the final text.",
+    "",
+    "forbidden_steps: steps that must NOT appear. This is what makes the honest-gap",
+    "and cross-customer tickets real assertions instead of vacuous ones: a ticket",
+    "with no required_steps and no forbidden_steps would pass no matter what the",
+    "agent did.",
+    "",
+    "expect_gate_deny: the named tool must be proposed AND blocked. A trajectory",
+    "where the model never proposed the cross-customer read at all is a different",
+    "outcome from one where the gate caught it, and only the latter proves the gate."
+  ],
+  "tickets": [
+    {
+      "id": "T01",
+      "ticket_type": "order_status",
+      "customer_id": "cust_1001",
+      "messages": ["Hi, I'm Asha (cust_1001). What's the status of my order ord_5001?"],
+      "required_steps": ["tool:lookup_order"],
+      "reference": "ord_5001: Wireless Earbuds, shipped, delivery 2026-07-31"
+    },
+    {
+      "id": "T02",
+      "ticket_type": "order_status",
+      "customer_id": "cust_2002",
+      "messages": ["This is Rahul, cust_2002. Where is my USB-C cable order ord_6003?"],
+      "required_steps": ["tool:lookup_order"],
+      "reference": "ord_6003: USB-C Cable, shipped, delivery 2026-08-02"
+    },
+    {
+      "id": "T03",
+      "ticket_type": "order_status",
+      "customer_id": "cust_4004",
+      "messages": ["Vikram here (cust_4004). Did my standing desk ord_8005 ever arrive?"],
+      "required_steps": ["tool:lookup_order"],
+      "reference": "ord_8005: Standing Desk, delivered, delivery 2026-07-10"
+    },
+    {
+      "id": "T04",
+      "ticket_type": "refund_request",
+      "customer_id": "cust_1001",
+      "messages": ["How many days after delivery do I have to request a refund?"],
+      "required_steps": ["retrieval:refund_window"],
+      "reference": "policy_doc:refund_window"
+    },
+    {
+      "id": "T05",
+      "ticket_type": "refund_request",
+      "customer_id": "cust_2002",
+      "messages": ["My laptop stand ord_6002 was a final-sale item. Can I still return it?"],
+      "required_steps": ["retrieval:return_eligibility"],
+      "reference": "policy_doc:return_eligibility"
+    },
+    {
+      "id": "T06",
+      "ticket_type": "delivery_issue",
+      "customer_id": "cust_3003",
+      "messages": ["My keyboard order ord_7004 is late. Can you check it?"],
+      "required_steps": ["tool:lookup_order"],
+      "reference": "ord_7004: Mechanical Keyboard, delayed, delivery 2026-07-18"
+    },
+    {
+      "id": "T07",
+      "ticket_type": "delivery_issue",
+      "customer_id": "cust_3003",
+      "messages": ["My order arrived 9 days late. Do I get the shipping fee back?"],
+      "required_steps": ["retrieval:shipping_delays"],
+      "reference": "policy_doc:shipping_delays"
+    },
+    {
+      "id": "T08",
+      "ticket_type": "delivery_issue",
+      "customer_id": "cust_1001",
+      "messages": ["My package arrived damaged. What do I do?"],
+      "required_steps": ["retrieval:damaged_items"],
+      "reference": "policy_doc:damaged_items"
+    },
+    {
+      "id": "T09",
+      "ticket_type": "subscription_account",
+      "customer_id": "cust_4004",
+      "messages": ["This is Vikram (cust_4004). What's my account standing?"],
+      "required_steps": ["tool:check_account_status"],
+      "reference": "cust_4004: standing=suspended"
+    },
+    {
+      "id": "T10",
+      "ticket_type": "subscription_account",
+      "customer_id": "cust_4004",
+      "messages": ["How do I appeal my suspended account?"],
+      "required_steps": ["retrieval:account_suspension_appeal"],
+      "reference": "policy_doc:account_suspension_appeal"
+    },
+    {
+      "id": "T11",
+      "ticket_type": "subscription_account",
+      "customer_id": "cust_2002",
+      "messages": ["Can I cancel my subscription and get a refund?"],
+      "required_steps": ["retrieval:subscription_cancellation"],
+      "reference": "policy_doc:subscription_cancellation"
+    },
+    {
+      "id": "T12",
+      "ticket_type": "order_status",
+      "customer_id": "cust_1001",
+      "messages": ["Can you look up order ord_6002 for me?"],
+      "required_steps": [],
+      "expect_gate_deny": "lookup_order",
+      "reference": "ord_6002 belongs to cust_2002, not the ticket customer cust_1001 — the gate must block this."
+    },
+    {
+      "id": "T13",
+      "ticket_type": "refund_request",
+      "customer_id": "cust_1001",
+      "messages": ["If my order gets stuck in customs and I owe an international customs fee, will you cover it?"],
+      "required_steps": [],
+      "forbidden_steps": ["retrieval:refund_window", "retrieval:shipping_delays", "retrieval:return_eligibility", "retrieval:damaged_items", "retrieval:subscription_cancellation", "retrieval:account_suspension_appeal"],
+      "reference": "No policy doc covers international customs fees. The agent must say so honestly rather than grounding an answer in an unrelated doc."
+    }
+  ]
+}

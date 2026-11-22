@@ -48,6 +48,33 @@ def _to_groq_tools(specs):
     ]
 
 
+def _active_specs():
+    """TOOL_SPECS, minus anything removed by a deliberate regression (§2.4).
+
+    AGENT_REGRESSION=drop_lookup_order is the "removing a tool" case the
+    assignment names. It's real: the model genuinely isn't offered the tool, so
+    it answers from the question's own wording instead of the order record. The
+    reply usually still reads fine, which is the entire point — only the
+    trajectory shows the lookup never happened.
+
+    Off unless the env var is set, so normal runs and the deployed agent are
+    untouched.
+    """
+    import os
+
+    if os.environ.get("AGENT_REGRESSION") == "drop_lookup_order":
+        return [s for s in TOOL_SPECS if s["name"] != "lookup_order"]
+    return TOOL_SPECS
+
+
+def tools_by_provider() -> dict:
+    specs = _active_specs()
+    return {"anthropic": _to_anthropic_tools(specs), "groq": _to_groq_tools(specs)}
+
+
+# Kept for callers that import the mapping directly. Built at import time from
+# the unregressed specs; tools_for() calls tools_by_provider() so the env var is
+# honoured even when it's set after import.
 TOOLS_BY_PROVIDER = {
     "anthropic": _to_anthropic_tools(TOOL_SPECS),
     "groq": _to_groq_tools(TOOL_SPECS),

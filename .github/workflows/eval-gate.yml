@@ -1,0 +1,98 @@
+# The regression gate (§2.4).
+#
+# Runs the trajectory eval on every push and fails the job when the pass rate
+# drops more than MAX_DROP_POINTS below the committed baseline.
+#
+# The pass/fail decision is NOT in this file (§7): eval/trajectory_eval.py exits
+# non-zero on a regression and that exit code is all Actions needs. The same
+# command runs locally, so what CI checks is exactly what was tested by hand.
+#
+# The deploy job gates on this via `needs: eval-gate` (see deploy.yml), so a
+# regressed agent can't reach AWS.
+#
+# No untrusted event data (issue/PR titles, commit messages, head_ref) is
+# interpolated anywhere here, so there is no workflow-injection surface; the only
+# expressions are repo-owned vars and secrets, passed through env:.
+
+name: eval-gate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:   # re-run the gate on demand, e.g. after a quota reset
+  workflow_call:       # deploy.yml reuses this as its `needs:` gate (§2.6.1),
+                       # so the check blocking a deploy can't drift from the
+                       # check running on push
+
+permissions:
+  contents: read
+
+jobs:
+  fast-checks:
+    # No LLM, no network, no secrets — so a fork PR and a keyless run still get
+    # real signal. Also catches the case where the scorer itself is broken, which
+    # would otherwise show up as a suspiciously green eval.
+    runs-on: ubuntu-latest
+    env:
+      # Third-party warning from mcp[cli]'s pydantic-settings, emitted on every
+      # MCP subprocess start. Not ours, not an error, and it buries real output.
+      PYTHONWARNINGS: "ignore::UserWarning"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Retriever sanity (6 expected docs + the honest gap)
+        run: python -m rag.test_retriever
+      - name: Permission gate
+        run: python -m agent.test_gate
+      - name: MCP layer
+        run: python -m mcp_server.test_server
+      - name: Trajectory scorer rejects bad trajectories
+        run: python -m eval.test_check
+      - name: Rate-limit retry (a 429 must not read as a regression)
+        run: python -m agent.test_retry
+      - name: pgvector survives a failed query (found in the live deploy)
+        run: python -m rag.test_pgvector_recovery
+
+  eval-gate:
+    needs: fast-checks
+    runs-on: ubuntu-latest
+    # 13 tickets x several LLM round-trips each, plus rate-limit backoff. Bounded
+    # explicitly so a hung provider fails in 25 minutes instead of burning the
+    # 6-hour default.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Trajectory eval vs baseline
+        env:
+          # glm in CI. Groq is faster, but its free tier caps at 200k tokens/day
+          # and a 13-ticket sweep plus local development exhausts that — at which
+          # point the gate fails on quota and reports it as a regression, which
+          # is the one thing this gate must never do. Override with a repository
+          # variable; whichever provider you pick needs its key as a secret below.
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'glm' }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # BM25 in CI: pgvector needs a reachable RDS instance, and the gate is
+          # scoring the agent's trajectory, not the retrieval backend. The
+          # deployed agent runs pgvector (§2.6.2).
+          RETRIEVAL_BACKEND: bm25
+          # Tracing off: no LangFuse keys in CI. agent/tracing.py no-ops cleanly.
+          LANGFUSE_TRACING_ENABLED: "false"
+          # Silence a pydantic-settings warning emitted by the mcp[cli] dependency
+          # on every MCP subprocess start — 13 tickets means 13+ copies burying the
+          # actual eval output. Third-party noise, not ours, and not an error.
+          PYTHONWARNINGS: "ignore::UserWarning"
+        # Non-zero exit from the script fails the job. No threshold logic here.
+        run: python -m eval.trajectory_eval
