@@ -1,4 +1,4 @@
-# The confident wrong path (§2.2)
+# The confident wrong path
 
 Two real cases, both found by reading output from actual eval runs rather than
 written to satisfy the requirement. Neither was the ticket expected to produce
@@ -62,16 +62,16 @@ policy from an unrelated product line — *"no partial-month refunds"*, *"14 day
 — sitting in its prompt labelled as the policy that governs this customer. A
 fluent, confident, wrong answer, with a final-answer review seeing nothing wrong.
 
-That is the whole point of §2.2: **the answer being right this time is not
+That is the whole point of a trajectory eval: **the answer being right this time is not
 evidence the path was right.**
 
-## What this says about our own gate (Defensible #2, §3)
+## What this says about our own gate
 
 The uncomfortable part. **The trajectory gate passes T03.** Its `required_steps`
 are `["tool:lookup_order"]`, that step ran, superset check satisfied — PASS.
 
-So the gate catches a *missing* required step but not a *spurious extra* one. §6
-warns about rebuilding the final-answer blind spot one layer up; this is a
+So the gate catches a *missing* required step but not a *spurious extra* one. It is easy
+to end up rebuilding the final-answer blind spot one layer up; this is a
 narrower version of the same mistake living inside a trajectory check.
 
 We did not paper over it by adding `subscription_cancellation` to T03's
@@ -87,7 +87,7 @@ The real fix belongs in retrieval, not in the eval:
 - require ≥2 distinct matched terms before a doc clears the threshold, since a
   single common-word hit is close to meaningless on a 6-doc corpus.
 
-Deliberately not patched in BM25: **the pgvector migration (§2.6.2) replaces
+Deliberately not patched in BM25: **the pgvector migration replaces
 this scorer entirely.** Cosine similarity over embeddings has no
 single-rare-term failure mode, so fixing the BM25 tokenizer would mean fixing a
 component being replaced in the same PR.
@@ -134,7 +134,7 @@ matched term: ['ever']
 
 ## Case 2: ticket T07 — the trajectory is right and the answer is false
 
-Found by the LLM-as-judge (§2.3), which scored it **0.00 on all three runs**.
+Found by the LLM-as-judge, which scored it **0.00 on all three runs**.
 This is the mirror image of T03 and the more dangerous of the two.
 
 **Question:** "My order arrived 9 days late. Do I get the shipping fee back?"
@@ -169,7 +169,7 @@ happened. Superset satisfied. **PASS.**
 
 There is no version of a path check that catches this, because the path is
 correct. The agent did everything right and then misread one field. This is the
-exact division of labour §2.3 describes: a rule verifies that the right steps
+exact division of labour between the two scorers: a rule verifies that the right steps
 ran; only a judge reading the response against the record can see that the claim
 built on those steps is false.
 
@@ -183,8 +183,8 @@ built on those steps is false.
 | LLM judge | 10.00 | **0.00** |
 
 Neither scorer catches both. The trajectory eval is the CI gate because it is
-cheap, deterministic, and blocks the regression class §2.4 asks about; the judge
+cheap, deterministic, and blocks capability regressions; the judge
 is not in the gate because a non-deterministic score that swings 7 points
 between identical runs (see JUDGE_RESULTS.md) cannot be a build-breaking
-threshold. This is Defensible #2 in concrete form: **what the gate checks is the
+threshold. In concrete form: **what the gate checks is the
 path, and T07 is precisely what that choice cannot catch.**

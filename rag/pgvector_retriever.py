@@ -1,7 +1,7 @@
 """
-pgvector retrieval over RDS PostgreSQL (§2.6.2).
+pgvector retrieval over RDS PostgreSQL.
 
-Replaces Assignment 1's in-process BM25 with dense-vector search in Postgres.
+Dense-vector search in Postgres, an alternative to the in-process BM25.
 This is a genuinely different retrieval implementation, not a config-flag swap:
 BM25 scores lexical overlap in Python over a dict of documents; this embeds the
 query with OpenAI `text-embedding-3-small` and asks Postgres for the nearest

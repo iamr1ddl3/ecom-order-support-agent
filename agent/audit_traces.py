@@ -1,9 +1,8 @@
 """
-Fetch traces back from LangFuse and verify they're correctly nested (§2.1).
+Fetch traces back from LangFuse and verify they're correctly nested.
 
-§7 is explicit: "don't stop at a single successful trace and call it done. Run a
-handful of real tickets through your agent and confirm every one of them shows
-up, correctly nested, before moving on." A demo that prints nicely tells you
+A single successful trace proves little: run a handful of real tickets and
+confirm every one of them shows up, correctly nested. A demo that prints nicely tells you
 nothing about what reached the dashboard — spans can be dropped at exit, land
 flat instead of nested, or arrive with the wrong observation type and still look
 fine on the terminal.

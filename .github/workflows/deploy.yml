@@ -1,4 +1,4 @@
-# Deploy to ECS Fargate, gated on the eval suite (§2.6.1).
+# Deploy to ECS Fargate, gated on the eval suite.
 #
 # Two properties this file exists to demonstrate:
 #
@@ -10,8 +10,8 @@
 #    infra/setup_oidc.sh once to create the role and trust policy.
 #
 # 2. THE GATE BLOCKS THE DEPLOY. `needs: eval-gate` means a regressed agent
-#    never reaches AWS — the same dependency Session 4's pipeline used, except
-#    the gate is no longer the last job in the pipeline.
+#    never reaches AWS — the gate is a prerequisite of the deploy, not the
+#    last job in the pipeline.
 #
 # Manual trigger only, deliberately: this stack costs money per run (RDS bills
 # continuously), so a teaching deployment should stand up when asked, not on
@@ -64,7 +64,7 @@ jobs:
       - name: Build and push, tagged by commit SHA
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          # §2.6.1: SHA, not `latest` — a latest-only scheme leaves no audit
+          # SHA, not `latest` — a latest-only scheme leaves no audit
           # trail from a running task back to the commit that produced it.
           IMAGE_TAG: ${{ github.sha }}
         run: |

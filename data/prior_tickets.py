@@ -1,7 +1,7 @@
 """
 Mock long-term memory: prior support tickets, keyed by customer ID.
 
-This is the "long-term" half of §2.4 — history that predates the current
+This is the "long-term" half of memory — history that predates the current
 conversation. The agent looks a customer up here to answer questions that depend
 on their past ("have I contacted you about this before?", "what happened with my
 last appeal?"), which the short-term buffer alone can't cover.

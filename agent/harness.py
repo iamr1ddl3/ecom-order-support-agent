@@ -1,14 +1,13 @@
 """
-The harness — the whole point of the assignment.
+The harness — the core of the agent.
 
 The model PROPOSES tool calls; this code DECIDES whether each one runs. That
 decision is `_permission_gate()` below, and it happens BEFORE the call is
-dispatched to the MCP server. This is the line the assignment asks you to be able
-to point at (§7: "can you point to the exact line where a proposed action gets
-checked before it runs?"). It is `gate_ok, reason = self._permission_gate(...)` in
+dispatched to the MCP server. The exact line where a proposed action gets
+checked before it runs is `gate_ok, reason = self._permission_gate(...)` in
 `_run_tool_calls`, and the dispatch on the next lines only happens when gate_ok.
 
-Flow per ticket (multi-turn, §2.1): classify the turn, retrieve policy if the
+Flow per ticket (multi-turn): classify the turn, retrieve policy if the
 turn is policy-shaped, then loop: model proposes -> GATE -> dispatch to MCP ->
 feed result back -> repeat until the model stops proposing tools -> return text.
 
@@ -114,7 +113,7 @@ class Ticket:
         self.ticket_type = ticket_type
         self.memory = Memory(customer_id)
         # Ordered record of what the agent actually DID this ticket — the
-        # trajectory the §2.2 eval scores. Captured as data rather than scraped
+        # trajectory the eval scores. Captured as data rather than scraped
         # back out of the [GATE]/[RETRIEVER] prints, because a stdout parser
         # fails silently the moment a print is reworded.
         self.steps: list[Step] = []
@@ -132,7 +131,7 @@ class Harness:
         self.provider = get_provider(provider_name)
         self.tools = tools_for(self.provider.name)
         # bm25 locally and in CI, pgvector in the deployed agent — same contract
-        # either way, selected by $RETRIEVAL_BACKEND (§2.6.2).
+        # either way, selected by $RETRIEVAL_BACKEND.
         self.retriever = get_retriever()
         # Loaded once so the gate can resolve an order_id -> owning customer without
         # a round-trip. This mirrors the server's ORDERS; in a real system the gate
@@ -148,7 +147,7 @@ class Harness:
           1. shape — the ID argument is present and well-formed (defense against a
              malformed proposal; FastMCP would also reject, this fails faster).
           2. ownership — the ID resolves to the ticket's bound customer.
-        A denied call never reaches the tool. This is the assignment's core line.
+        A denied call never reaches the tool. This is the agent's core safety line.
         """
         spec = _TOOL_ID_ARG.get(tool_name)
         if spec is None:
@@ -191,7 +190,7 @@ class Harness:
         """Returns (context_block, hits). Empty hits => honest gap; the context
         block tells the model to say so instead of guessing."""
         with _observe("retriever", "retrieve-policy", input={"query": message}) as span:
-            # AGENT_REGRESSION=no_retrieval (§2.4): break the retrieval step so
+            # AGENT_REGRESSION=no_retrieval: break the retrieval step so
             # policy answers become ungrounded recollection. The model still
             # answers confidently; only the trajectory shows nothing was retrieved.
             if os.environ.get("AGENT_REGRESSION") == "no_retrieval":

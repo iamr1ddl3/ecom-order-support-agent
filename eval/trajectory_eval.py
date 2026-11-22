@@ -1,11 +1,11 @@
 """
-Trajectory evaluation (§2.2) and the regression gate's decision logic (§2.4).
+Trajectory evaluation and the regression gate's decision logic.
 
 Scores the PATH, not the prose. A ticket passes when the steps the agent actually
 took are a superset of that ticket type's required_steps — did the lookup or the
 retrieval really happen — and when nothing forbidden happened. The final answer's
-wording is deliberately not consulted: §6 names "a gate that only checks the final
-answer" as the main way to lose points here, because a fluent answer built on a
+wording is deliberately not consulted: a gate that only checks the final
+answer misses real regressions, because a fluent answer built on a
 skipped policy check reads exactly like a correct one.
 
 Three assertion shapes, because "did the required step run" alone is too weak:
@@ -16,7 +16,7 @@ Three assertion shapes, because "did the required step run" alone is too weak:
                                         stopped. A run where the model never
                                         proposed it proves nothing about the gate.
 
-The pass/fail decision lives HERE, not in the workflow YAML (§7): CI just runs
+The pass/fail decision lives HERE, not in the workflow YAML: CI just runs
 this and lets the exit code decide. Exit 0 = pass, 1 = regression, 2 = usage error.
 
 Run:
@@ -40,7 +40,7 @@ BASELINE_PATH = _HERE / "baseline.json"
 
 # Fail the build if the pass rate falls more than this many POINTS below baseline.
 #
-# Relative, not absolute (§2.4). An absolute bar ("must score >= 70%") lets a
+# Relative, not absolute. An absolute bar ("must score >= 70%") lets a
 # score rot downward forever without ever crossing the line; a relative one
 # catches the drift itself.
 #

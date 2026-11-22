@@ -1,5 +1,5 @@
 """
-Sanity check for the trajectory scorer itself (§2.2).
+Sanity check for the trajectory scorer itself.
 
 A 100% pass rate is only meaningful if the scorer can actually FAIL. These
 asserts feed it deliberately-broken trajectories and require it to reject them —

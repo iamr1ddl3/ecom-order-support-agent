@@ -1,7 +1,7 @@
 """
 Mock in-memory DBs for the order-support agent.
 
-Same customer IDs across ORDERS and ACCOUNTS (assignment §2.2). Account standing
+Same customer IDs across ORDERS and ACCOUNTS. Account standing
 spans active / flagged / suspended so the account and appeal scenarios have real
 state to key off. Several orders belong to customers *other* than the demo ticket's
 customer — those are the cross-customer reads the permission gate must reject.

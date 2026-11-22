@@ -2,9 +2,8 @@
 Provider abstraction — one interface, four backends (Anthropic Claude, Groq,
 GLM via Z.ai, and OpenRouter).
 
-Assignment §7 asks for exactly this: "isolate [the LLM] behind a small provider
-abstraction (one function that takes a system prompt, messages, and tools, and
-returns a normalized response)." Everything above this file (harness, RAG demos)
+The LLM is isolated behind a small provider abstraction: one function that takes
+a system prompt, messages, and tools, and returns a normalized response. Everything above this file (harness, RAG demos)
 talks to a `Provider` and never imports a vendor SDK directly, so swapping
 providers is a one-env-var change, not a code change scattered everywhere.
 
@@ -86,7 +85,7 @@ def _with_retry(call, attempts: int = 5):
     eval sweep exceeds that comfortably. Without this, a 429 surfaces as a failed
     ticket and the regression gate reports "regression" for what is really a
     quota pause — a gate that is red for the wrong reason is one people learn to
-    ignore, which is the failure §2.4 exists to prevent.
+    ignore, which defeats the point of having a gate.
 
     Sleeps for the interval the error names when it gives one (Groq and Anthropic
     both do), otherwise backs off exponentially. Retries only rate limits;
@@ -245,7 +244,7 @@ _VALID = set(PROVIDERS)
 
 
 def _trace_create(provider):
-    """Wrap provider.create() in a LangFuse `generation` observation (§2.1).
+    """Wrap provider.create() in a LangFuse `generation` observation.
 
     Applied at the factory, not inside each class, so all three backends are
     instrumented from one place and a future provider can't quietly ship
@@ -298,7 +297,7 @@ def tools_for(provider_name: str) -> list:
     OpenAI shape, so both map to the 'groq' spec set.
 
     Built per call rather than read from the module-level mapping so that
-    AGENT_REGRESSION (§2.4) applies even when it's set after import — which is
+    AGENT_REGRESSION applies even when it's set after import — which is
     exactly what eval/before_after.py does when it runs both variants in one
     process."""
     key = "anthropic" if provider_name == "anthropic" else "groq"

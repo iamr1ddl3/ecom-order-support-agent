@@ -1,8 +1,8 @@
 {
   "_comment": [
-    "Fixed test-ticket set for the §2.2 trajectory eval. Stored as data, not inline",
-    "in the eval script, because the §2.4 CI gate and the §2.5 before/after report",
-    "reuse this exact set (§7).",
+    "Fixed test-ticket set for the trajectory eval. Stored as data, not inline",
+    "in the eval script, because the CI gate and the before/after report",
+    "reuse this exact set.",
     "",
     "required_steps: what the trajectory MUST contain for this ticket type, as",
     "'<kind>:<name>' keys matching agent.harness.Step.key(). The check is a SUPERSET",

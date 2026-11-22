@@ -1,9 +1,9 @@
-# The regression gate (§2.4).
+# The regression gate.
 #
 # Runs the trajectory eval on every push and fails the job when the pass rate
 # drops more than MAX_DROP_POINTS below the committed baseline.
 #
-# The pass/fail decision is NOT in this file (§7): eval/trajectory_eval.py exits
+# The pass/fail decision is NOT in this file: eval/trajectory_eval.py exits
 # non-zero on a regression and that exit code is all Actions needs. The same
 # command runs locally, so what CI checks is exactly what was tested by hand.
 #
@@ -20,7 +20,7 @@ on:
   push:
   pull_request:
   workflow_dispatch:   # re-run the gate on demand, e.g. after a quota reset
-  workflow_call:       # deploy.yml reuses this as its `needs:` gate (§2.6.1),
+  workflow_call:       # deploy.yml reuses this as its `needs:` gate,
                        # so the check blocking a deploy can't drift from the
                        # check running on push
 
@@ -86,7 +86,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # BM25 in CI: pgvector needs a reachable RDS instance, and the gate is
           # scoring the agent's trajectory, not the retrieval backend. The
-          # deployed agent runs pgvector (§2.6.2).
+          # deployed agent runs pgvector.
           RETRIEVAL_BACKEND: bm25
           # Tracing off: no LangFuse keys in CI. agent/tracing.py no-ops cleanly.
           LANGFUSE_TRACING_ENABLED: "false"

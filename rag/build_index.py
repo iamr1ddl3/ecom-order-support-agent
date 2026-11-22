@@ -1,5 +1,5 @@
 """
-Build the pgvector index over the policy docs (§2.6.2).
+Build the pgvector index over the policy docs.
 
 One command, idempotent: creates the extension and table if absent, embeds the
 6 policy docs, and upserts them. Safe to re-run — the ON CONFLICT clause means a

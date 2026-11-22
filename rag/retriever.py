@@ -8,7 +8,7 @@ match true synonyms with zero shared words — that's the ceiling an embedding
 model would lift, and the Retriever interface below is exactly the seam to swap
 in Chroma later without touching the harness.
 
-Two things the assignment demands live here:
+Two properties live here:
   - Traceable: retrieve() returns (doc_id, score, text) so the caller can print
     exactly which chunk grounded each answer.
   - Honest gap: scores below `min_score` are dropped. An empty result means
@@ -97,7 +97,7 @@ class Retriever:
 
 
 def get_retriever(backend: str | None = None):
-    """Return the retrieval backend named by $RETRIEVAL_BACKEND (§2.6.2).
+    """Return the retrieval backend named by $RETRIEVAL_BACKEND.
 
     'pgvector' is what the deployed agent runs; 'bm25' keeps local development
     and CI working with no database. Both satisfy the same

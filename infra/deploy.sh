@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command, stack from nothing to a live URL (§2.6.1).
+# One command, stack from nothing to a live URL.
 #
 #   bash infra/deploy.sh
 #
@@ -57,7 +57,7 @@ if ! aws ecr describe-repositories --region "$REGION" --repository-names "$PROJE
 fi
 REGISTRY="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
 
-# §2.6.1: tag by commit SHA, not `latest` — a latest-only scheme gives no audit
+# tag by commit SHA, not `latest` — a latest-only scheme gives no audit
 # trail from a running task back to the commit that produced it.
 SHA="$(git rev-parse --short HEAD)"
 IMAGE="${REGISTRY}/${PROJECT}:${SHA}"
@@ -113,8 +113,8 @@ say "Waiting for the service to become healthy"
 aws ecs wait services-stable --region "$REGION" \
   --cluster "$(out ClusterName)" --services "$(out ServiceName)" || true
 
-# RDS is not publicly accessible — by design (§7: "keep the instance in a
-# private subnet, reachable only from your ECS task's security group"). There is
+# RDS is not publicly accessible — by design: it sits in a
+# private subnet, reachable only from the ECS task's security group. There is
 # therefore no route to it from this laptop, so the index MUST be built from
 # inside the running task via ECS Exec.
 say "Building the pgvector index inside the running task"

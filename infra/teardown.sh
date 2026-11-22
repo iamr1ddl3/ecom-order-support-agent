@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Remove every AWS resource this project created (§2.6.5).
+# Remove every AWS resource this project created.
 #
 #   bash infra/teardown.sh
 #
-# RDS bills continuously while it exists, so this has to actually work — §7 notes
-# that a teardown script which silently fails on a dependency ordering issue is a
+# RDS bills continuously while it exists, so this has to actually work. A teardown script which silently fails on a dependency ordering issue is a
 # common real mistake, not a hypothetical one. Two known ordering hazards are
 # handled explicitly:
 #

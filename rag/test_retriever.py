@@ -1,6 +1,6 @@
 """
-Retriever sanity check — the §7 "guess which doc, confirm the retriever returns
-it, BEFORE wiring an LLM" step, as runnable asserts.
+Retriever sanity check — "guess which doc, confirm the retriever returns
+it, BEFORE wiring an LLM", as runnable asserts.
 
 Guards two things that break silently: (1) each real question retrieves its
 expected doc, (2) the uncovered question (customs fees) clears NOTHING, so the
@@ -8,7 +8,7 @@ honest-gap path actually fires. If you change the doc set or min_score, this is
 what tells you the coverage threshold still holds.
 
 Runs against EITHER backend, because it guards the same two properties for both
-and they are the properties the pgvector migration (§2.6.2) is most likely to
+and they are the properties the pgvector migration is most likely to
 break — the threshold polarity flips from "score above 1.0" to "distance below
 0.48", so a careless port silently inverts the honest-gap logic.
 
@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 from rag.retriever import get_retriever
 
-# (question, expected top doc_id) — the "guess" half of the §7 sanity check.
+# (question, expected top doc_id) — the "guess" half of the sanity check.
 EXPECTED = [
     ("How many days after delivery can I request a refund?", "refund_window"),
     ("My order arrived 9 days late, do I get the shipping fee back?", "shipping_delays"),

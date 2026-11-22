@@ -1,10 +1,9 @@
-# ECS Fargate + ALB + ECR + RDS PostgreSQL/pgvector, with autoscaling (§2.6).
+# ECS Fargate + ALB + ECR + RDS PostgreSQL/pgvector, with autoscaling.
 #
 # One command recreates all of it from nothing:
 #   bash infra/deploy.sh
 #
-# Shape follows Session 4's demoed architecture deliberately (§7 says reuse it,
-# don't reinvent): ECR repo, ECS cluster/service/task-def, ALB with an ip-type
+# Standard shape, deliberately not reinvented: ECR repo, ECS cluster/service/task-def, ALB with an ip-type
 # target group, and security groups where only the ALB reaches the task.
 #
 # Networking note: this uses the DEFAULT VPC's subnets rather than creating a
@@ -16,7 +15,7 @@
 # RDS is not publicly accessible and only admits the task's security group.
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: eCom order-support agent - ECS Fargate + ALB + RDS pgvector (Assignment 2)
+Description: eCom order-support agent - ECS Fargate + ALB + RDS pgvector
 
 Parameters:
   ProjectName:
@@ -86,7 +85,7 @@ Resources:
   # --- Security groups -----------------------------------------------------
   # Three groups, chained: internet -> ALB -> task -> database. Each tier admits
   # only the tier above it, so there is no path from 0.0.0.0/0 to the task or
-  # the database (§2.6.1, §7).
+  # the database.
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -136,7 +135,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub "${ProjectName}-db"
-      # §2.6.2: smallest class that runs, single-AZ, no read replica. This is a
+      # smallest class that runs, single-AZ, no read replica. This is a
       # teaching deployment and RDS bills continuously while it exists.
       DBInstanceClass: db.t4g.micro
       Engine: postgres
@@ -170,7 +169,7 @@ Resources:
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref VpcId
-      # ip, not instance: Fargate tasks have no EC2 instance to register (§7).
+      # ip, not instance: Fargate tasks have no EC2 instance to register.
       TargetType: ip
       HealthCheckPath: /health
       HealthCheckIntervalSeconds: 30
@@ -260,7 +259,7 @@ Resources:
             - ContainerPort: 8000
           Environment:
             - Name: RETRIEVAL_BACKEND
-              Value: pgvector          # §2.6.2: the deployed agent uses RDS
+              Value: pgvector          # the deployed agent uses RDS
             - Name: DATABASE_URL
               Value: !Sub "postgresql://postgres:${DBPassword}@${Database.Endpoint.Address}:5432/agent"
             - Name: LLM_PROVIDER
@@ -316,7 +315,7 @@ Resources:
         MinimumHealthyPercent: 100
         MaximumPercent: 200
 
-  # --- Autoscaling (§2.6.3) ------------------------------------------------
+  # --- Autoscaling ------------------------------------------------
   ScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:

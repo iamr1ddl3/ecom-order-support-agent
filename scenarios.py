@@ -1,6 +1,6 @@
 """
-The 5 demo ticket scenarios (§3 Functional: "at least 5 distinct ticket
-scenarios end to end"). Each is (label, customer_id, [messages]). Multi-message
+The 5 demo ticket scenarios (5 distinct ticket
+scenarios end to end). Each is (label, customer_id, [messages]). Multi-message
 scenarios exercise multi-turn memory within one ticket.
 
 Coverage across the 5:

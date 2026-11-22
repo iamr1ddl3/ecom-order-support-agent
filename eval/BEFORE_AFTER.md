@@ -1,4 +1,4 @@
-# Before/after report (§2.5) — and the gate blocking it live (§2.4)
+# Before/after report — and the gate blocking it live
 
 ## The gate blocked a real regressed version in a real Actions run
 
@@ -7,7 +7,7 @@ offered tools and was pushed through the real pipeline:
 
 | Run | Branch | Result |
 |---|---|---|
-| [31296187273](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296187273) | `assignment-2` | **success** — 13/13, 100.0%, gate PASS |
+| [31296187273](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296187273) | feature branch | **success** — 13/13, 100.0%, gate PASS |
 | [31296404885](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296404885) | `regression-demo` | **failure** — 8/13, 61.5%, gate FAIL |
 
 ```
@@ -72,8 +72,8 @@ assertion.)
 ## The regression
 
 `AGENT_REGRESSION=drop_lookup_order` removes `lookup_order` from the tool list
-the model is offered (`agent/tools_schema.py`). This is §2.4's own example —
-"removing a tool" — and it is real: the model genuinely cannot call it, and
+the model is offered (`agent/tools_schema.py`). This is the classic
+"removing a tool" regression — and it is real: the model genuinely cannot call it, and
 falls back to `check_account_status`, which returns the customer's order *IDs*
 but no status or delivery date.
 
