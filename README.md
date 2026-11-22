@@ -18,7 +18,7 @@ The demo is a small online shop, Cartwell, with an AI support assistant, Ava. Pi
 
 **Watch the 2-minute explainer:**
 
-<!-- Edit this README on github.com and drag docs video (ava-explained.mp4) here; GitHub turns it into an inline player link. -->
+https://github.com/user-attachments/assets/104b7a98-7fb1-4dbc-8608-64599523628a
 
 [![Cartwell help center with the Ava chat](docs/images/help-center.png)](https://ecom-agent.delightfulflower-dbb15f8e.centralindia.azurecontainerapps.io)
 
