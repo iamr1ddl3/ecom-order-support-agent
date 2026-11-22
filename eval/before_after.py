@@ -31,6 +31,7 @@ import argparse
 import os
 import sys
 
+from agent.providers import PROVIDERS
 from eval.trajectory_eval import load_tickets, pass_rate, run
 
 REGRESSIONS = ("drop_lookup_order", "no_retrieval")
@@ -54,7 +55,7 @@ def _run_variant(label: str, regression: str | None, provider: str | None):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Before/after eval comparison (§2.5).")
-    ap.add_argument("--provider", choices=["anthropic", "groq", "glm"], default=None)
+    ap.add_argument("--provider", choices=PROVIDERS, default=None)
     ap.add_argument("--regression", choices=REGRESSIONS, default="drop_lookup_order")
     args = ap.parse_args()
 

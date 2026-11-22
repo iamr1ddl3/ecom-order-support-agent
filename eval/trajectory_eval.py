@@ -32,6 +32,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agent.providers import PROVIDERS
+
 _HERE = Path(__file__).parent
 TICKETS_PATH = _HERE / "test_tickets.json"
 BASELINE_PATH = _HERE / "baseline.json"
@@ -150,7 +152,7 @@ def pass_rate(results: list[TicketResult]) -> float:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Trajectory eval + regression gate.")
-    ap.add_argument("--provider", choices=["anthropic", "groq", "glm"], default=None)
+    ap.add_argument("--provider", choices=PROVIDERS, default=None)
     ap.add_argument("--write-baseline", action="store_true",
                     help="record this run's score as the new known-good baseline")
     args = ap.parse_args()

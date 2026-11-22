@@ -56,8 +56,17 @@ def embed(texts: list[str]) -> list[list[float]]:
     """Embed a batch of strings. One API call for the whole batch."""
     from openai import OpenAI
 
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    resp = client.embeddings.create(model=EMBED_MODEL, input=texts)
+    # Same model either way, so vectors stay comparable with an index built by
+    # the other route. OpenRouter is the fallback when only its key is set.
+    if os.environ.get("OPENAI_API_KEY"):
+        client, model = OpenAI(api_key=os.environ["OPENAI_API_KEY"]), EMBED_MODEL
+    elif os.environ.get("OPENROUTER_API_KEY"):
+        client = OpenAI(base_url="https://openrouter.ai/api/v1",
+                        api_key=os.environ["OPENROUTER_API_KEY"])
+        model = f"openai/{EMBED_MODEL}"
+    else:
+        raise RuntimeError("pgvector retrieval needs OPENAI_API_KEY or OPENROUTER_API_KEY")
+    resp = client.embeddings.create(model=model, input=texts)
     return [d.embedding for d in resp.data]
 
 

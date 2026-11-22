@@ -35,6 +35,7 @@ import statistics
 import sys
 from pathlib import Path
 
+from agent.providers import PROVIDERS
 from eval.trajectory_eval import load_tickets
 from rag.retriever import load_policy_docs
 
@@ -148,7 +149,7 @@ def judge_once(provider, question: str, reference: str, response: str,
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="LLM-as-judge over agent responses.")
-    ap.add_argument("--provider", choices=["anthropic", "groq", "glm"], default=None)
+    ap.add_argument("--provider", choices=PROVIDERS, default=None)
     ap.add_argument("--runs", type=int, default=RUNS,
                     help=f"judge calls per ticket, averaged (default {RUNS})")
     ap.add_argument("--limit", type=int, default=None, help="only judge the first N tickets")
