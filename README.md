@@ -1,5 +1,12 @@
 # eCom Order Support Agent — Harness, Tools & Grounding
 
+[![eval-gate](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/workflows/eval-gate.yml/badge.svg)](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/workflows/eval-gate.yml)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![MCP](https://img.shields.io/badge/tools-MCP%20stdio-6E56CF)
+![Retrieval](https://img.shields.io/badge/RAG-BM25%20%7C%20pgvector-336791?logo=postgresql&logoColor=white)
+![Tracing](https://img.shields.io/badge/tracing-LangFuse-0A0A0A)
+![Deploy](https://img.shields.io/badge/deploy-AWS%20ECS%20Fargate-FF9900?logo=amazonwebservices&logoColor=white)
+
 A multi-turn e-commerce order-support agent. It handles four ticket types — order
 status, delivery issues, refund requests, and subscription/account questions —
 by classifying each turn, retrieving the relevant policy, looking up real (mock)
@@ -10,6 +17,89 @@ decides whether each proposed tool call is allowed to run**, and it decides
 server; policy answers are grounded in a retrieved policy doc (and the agent says
 so honestly when no doc covers the question).
 
+## At a glance
+
+| | |
+|---|---|
+| **Ticket types** | 4 — order status · delivery issue · refund request · subscription/account |
+| **LLM providers** | Anthropic · Groq · GLM (Z.ai) · OpenRouter (Anthropic, OpenAI and more with one key) |
+| **Tools** | `lookup_order`, `check_account_status` over an MCP stdio server |
+| **Grounding** | 6 policy docs · BM25 locally, pgvector on Postgres in production · honest gap when nothing matches |
+| **Safety boundary** | Permission gate in the harness, checked **before** dispatch; MCP server re-checks ownership |
+| **Evaluation** | 13-ticket trajectory eval (baseline 100%) · LLM-as-judge (mean 6.82/10) · CI gate at −10 points |
+| **Interfaces** | CLI (`main.py`) · HTTP API (`app.py`: `/health`, `/ready`, `/chat`) |
+| **Deployment** | Docker → ECS Fargate behind an ALB, RDS Postgres + pgvector, GitHub OIDC (no static keys) |
+
+### Architecture
+
+```mermaid
+flowchart LR
+    U(["Customer"]) -->|"CLI or POST /chat"| H
+
+    subgraph H["Harness — agent/harness.py"]
+        direction TB
+        C["Classify ticket type<br/>(keyword map, no LLM)"]
+        M["Memory<br/>short-term buffer + prior tickets"]
+        L["LLM loop<br/>agent/providers.py"]
+        G{{"Permission gate<br/>_permission_gate"}}
+        C --> L
+        M --> L
+        L -->|"proposed tool call"| G
+    end
+
+    L <-->|"chat + tool specs"| P[("LLM provider<br/>Anthropic · Groq · GLM · OpenRouter")]
+    H -->|"retrieve(query)"| R["Retriever<br/>BM25 or pgvector"]
+    R --> D[("Policy docs<br/>6 markdown files")]
+    G -->|"ALLOW"| S["MCP server (stdio)<br/>lookup_order · check_account_status"]
+    G -.->|"DENY — never dispatched"| X(["Refusal returned to model"])
+    S --> MD[("Mock orders + accounts")]
+    H -. "spans, generations, tool calls" .-> T[("LangFuse")]
+```
+
+### One turn, step by step
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as Customer (cust_1001)
+    participant H as Harness
+    participant R as Retriever
+    participant LLM as LLM provider
+    participant G as Permission gate
+    participant MCP as MCP server
+
+    C->>H: "Where is order ord_6002?"
+    H->>H: classify → order_status
+    H->>R: retrieve(policy)
+    R-->>H: best doc, or honest gap
+    H->>LLM: system + history + policy + tools
+    LLM-->>H: tool_use lookup_order(ord_6002)
+    H->>G: check ord_6002 against ticket customer
+    alt order belongs to cust_1001
+        G-->>H: ALLOW
+        H->>MCP: lookup_order(ord_6002)
+        MCP-->>H: order record
+    else order belongs to someone else
+        G-->>H: DENY (belongs to cust_2002)
+        Note over H,MCP: the call never reaches the server
+    end
+    H->>LLM: tool result or denial
+    LLM-->>H: final answer
+    H-->>C: grounded reply + [GATE] / [RETRIEVER] log lines
+```
+
+### What each ticket type leans on
+
+| Ticket type | Main capability |
+|---|---|
+| `order_status` | 🔧 Tool lookup (`lookup_order`) |
+| `delivery_issue` | 🔧 Tool lookup **+** 📄 shipping-delay policy |
+| `refund_request` | 📄 Policy retrieval (refund window, return eligibility, damaged items) |
+| `subscription_account` | 🔧 `check_account_status` **+** 🧠 prior-ticket memory |
+
+Retrieval and the customer's prior tickets are available on every turn; the
+table shows what each type mostly depends on to answer well.
+
 ## Prerequisites
 
 - **Python 3.10+** (developed on 3.14). For the default BM25 backend nothing else
@@ -17,7 +107,8 @@ so honestly when no doc covers the question).
   pgvector backend does need Postgres and an OpenAI key; see
   [Retrieval on pgvector](#7-retrieval-on-pgvector-262).
 - One LLM API key for any one of: **Anthropic** (default), **Groq** (free tier),
-  or **GLM via Z.ai**. Groq and GLM share one OpenAI-compatible provider class.
+  **GLM via Z.ai**, or **OpenRouter** (one key for Anthropic, OpenAI and other
+  vendors). Groq, GLM and OpenRouter share one OpenAI-compatible provider class.
 
 ## Setup
 
@@ -79,10 +170,11 @@ python -m rag.test_retriever      # retrieval hits expected docs; customs = hone
 
 ```
 main.py                  CLI: --demo (5 scenarios) and --customer <id> (chat)
+app.py                   HTTP API (FastAPI): /health, /ready, /chat
 scenarios.py             the 5 demo ticket scenarios
 agent/
   harness.py             THE harness loop + the permission gate (_permission_gate)
-  providers.py           provider abstraction: get_provider('anthropic'|'groq')
+  providers.py           provider abstraction: get_provider('anthropic'|'groq'|'glm'|'openrouter')
   tools_schema.py        tool specs offered to the model, per-provider shape
   memory.py              short-term buffer + long-term prior-ticket lookup
   test_gate.py           permission-gate unit test (no LLM)
@@ -198,6 +290,19 @@ tool span, so a blocked cross-customer read is visible in the trace as an
 
 ## 2. Trajectory eval (§2.2)
 
+```mermaid
+flowchart LR
+    T[("13 test tickets<br/>eval/test_tickets.json")] --> A["Run agent<br/>capture trajectory"]
+    A --> S{"Score the path<br/>required · forbidden · gate deny"}
+    S --> P["Pass rate"]
+    B[("baseline.json<br/>100%")] --> CMP{"Drop > 10 points?"}
+    P --> CMP
+    CMP -->|"no"| OK(["exit 0 — deploy allowed"])
+    CMP -->|"yes"| FAIL(["exit 1 — regression, deploy blocked"])
+    A -.->|"no API key / quota"| SETUP(["exit 2 — setup failure"])
+    A --> J["LLM judge (3× per ticket)<br/>read by a human, not in the gate"]
+```
+
 ```bash
 python -m eval.trajectory_eval                  # score vs baseline
 python -m eval.trajectory_eval --write-baseline # record a new known-good score
@@ -297,6 +402,14 @@ runner.
 
 ## 6. Before/after (§2.5) — `eval/BEFORE_AFTER.md`
 
+```mermaid
+xychart-beta
+    title "Trajectory pass rate"
+    x-axis ["Clean agent", "lookup_order removed"]
+    y-axis "Pass rate (%)" 0 --> 100
+    bar [100, 61.5]
+```
+
 ```bash
 python -m eval.before_after --provider groq
 ```
@@ -322,7 +435,8 @@ python -m rag.build_index                             # idempotent
 RETRIEVAL_BACKEND=pgvector python -m rag.test_retriever
 ```
 
-`rag/pgvector_retriever.py` embeds with OpenAI `text-embedding-3-small` (1536-dim)
+`rag/pgvector_retriever.py` embeds with OpenAI `text-embedding-3-small` (1536-dim;
+via OpenRouter when only `OPENROUTER_API_KEY` is set)
 and queries `policy_docs` with `<=>` (cosine distance), filtering in SQL. Same
 `retrieve(query, k) -> [(doc_id, score, text)]` contract as BM25, so the harness
 is untouched. `RETRIEVAL_BACKEND=bm25|pgvector` selects; both pass the same
@@ -409,6 +523,26 @@ rag/
 
 Full evidence in [`infra/DEPLOYMENT.md`](infra/DEPLOYMENT.md): real curl output,
 the scale-out event, and the four bugs the live deploy exposed.
+
+> **Status:** the stack was live on 2026-08-09 and has since been torn down to
+> stop RDS billing. The ALB URL below no longer resolves. Run `infra/deploy.sh`
+> to bring it back (~10 minutes).
+
+```mermaid
+flowchart LR
+    GH["GitHub Actions<br/>deploy.yml"] -->|"needs: eval-gate"| OIDC["OIDC role<br/>no static keys"]
+    OIDC --> ECR[("ECR<br/>image tagged by git SHA")]
+    OIDC --> CFN["CloudFormation<br/>infra/stack.yml"]
+
+    Internet(["Internet"]) -->|"HTTP :80"| ALB["Application Load Balancer"]
+    subgraph VPC["VPC — ap-south-1"]
+        ALB -->|":8000"| ECS["ECS Fargate tasks<br/>FastAPI + harness + MCP subprocess<br/>autoscale 1–4 @ 50% CPU"]
+        ECS -->|":5432"| RDS[("RDS Postgres 17<br/>pgvector")]
+    end
+    ECR --> ECS
+    ECS -->|"LLM + embeddings"| LLM(["LLM provider"])
+    ECS -.-> CW[("CloudWatch logs")]
+```
 
 ### Architecture, named (§8.6)
 
