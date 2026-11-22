@@ -38,15 +38,20 @@ import os
 #   nearest wrong hit  (customs gap ->
 #                       shipping_delays) d = 0.5313
 #
-# So any cutoff in (0.4302, 0.5313) satisfies both requirements; 0.48 is the
-# midpoint, giving ~0.05 of margin on each side. Note this is much tighter than
+# So any cutoff in (0.4302, 0.5313) satisfies both requirements.
+#
+# Raised from 0.48 to 0.51 after the live deploy: a plain-language paraphrase
+# ("How long do I have to get my cash back after the parcel arrives?") sits at
+# d = 0.486 from refund_window and was being treated as an honest gap. 0.51
+# keeps ~0.02 of margin on both sides: above that paraphrase, below the customs
+# gap question. Note this is much tighter than
 # an intuitive guess would suggest — 0.62 "feels" strict for cosine distance but
 # would let the customs question match shipping_delays and silently destroy the
 # honest-gap path, which is the whole behaviour the threshold exists to protect.
 #
 # Re-run rag/test_retriever.py after any change to the doc set or embedding
 # model; it fails if this separation stops holding.
-DEFAULT_MAX_DISTANCE = 0.48
+DEFAULT_MAX_DISTANCE = 0.51
 
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIM = 1536
@@ -125,6 +130,13 @@ class PgVectorRetriever:
         cutoff = self.max_distance if max_distance is None else max_distance
         vec = embed([query])[0]
 
+        rows = self._query(vec, cutoff, k)
+
+        # Return similarity, not raw distance, so higher stays better for every
+        # caller — the harness prints this as `score=`.
+        return [(doc_id, 1.0 - float(distance), text) for doc_id, text, distance in rows]
+
+    def _query(self, vec, cutoff: float, k: int, retry: bool = True):
         try:
             with self.conn.cursor() as cur:
                 # <=> is pgvector's cosine distance operator. Filtering in SQL rather
@@ -141,7 +153,11 @@ class PgVectorRetriever:
                     (vec, vec, cutoff, k),
                 )
                 rows = cur.fetchall()
-        except Exception:
+            # End the read transaction so the connection sits idle, not "idle in
+            # transaction", between requests.
+            self.conn.rollback()
+            return rows
+        except Exception as exc:
             # Roll back before re-raising. The connection is long-lived (one per
             # process), and psycopg leaves a failed transaction open: every later
             # query then dies with "current transaction is aborted, commands
@@ -153,8 +169,19 @@ class PgVectorRetriever:
                 self.conn.rollback()
             except Exception:
                 self._conn = None  # unusable connection; reconnect on next call
+            # A dropped connection (serverless Postgres such as Neon suspends
+            # idle compute and closes its sockets; a DB restart does the same)
+            # is retried once on a fresh connection, so the first request after
+            # an idle spell answers instead of failing.
+            if retry and _is_connection_error(exc):
+                self._conn = None
+                return self._query(vec, cutoff, k, retry=False)
             raise
 
-        # Return similarity, not raw distance, so higher stays better for every
-        # caller — the harness prints this as `score=`.
-        return [(doc_id, 1.0 - float(distance), text) for doc_id, text, distance in rows]
+
+def _is_connection_error(exc: Exception) -> bool:
+    try:
+        import psycopg
+    except ImportError:
+        return False
+    return isinstance(exc, (psycopg.OperationalError, psycopg.InterfaceError))
