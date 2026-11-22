@@ -12,7 +12,7 @@ An AI customer-support agent for an online shop. It answers questions about orde
 
 ## Try it live
 
-**[Open the live demo](https://ecom-agent.delightfulflower-dbb15f8e.centralindia.azurecontainerapps.io)** · **[See how it works](https://ecom-agent.delightfulflower-dbb15f8e.centralindia.azurecontainerapps.io/how-it-works)**
+**[Open the live demo](https://ecom-agent.delightfulflower-dbb15f8e.centralindia.azurecontainerapps.io)** · **[See how it works](https://iamr1ddl3.github.io/ecom-order-support-agent/explainer/)**
 
 The demo is a small online shop, Cartwell, with an AI support assistant, Ava. Pick a demo customer, then ask about an order, a refund, or the account. Turn on the trace to watch each step: which policy was retrieved, which tool was called, and whether the permission gate allowed it. Try asking about another customer's order to see the gate refuse it.
 
@@ -22,9 +22,9 @@ https://github.com/user-attachments/assets/104b7a98-7fb1-4dbc-8608-64599523628a
 
 [![Cartwell help center with the Ava chat](docs/images/help-center.png)](https://ecom-agent.delightfulflower-dbb15f8e.centralindia.azurecontainerapps.io)
 
-The [how it works](https://ecom-agent.delightfulflower-dbb15f8e.centralindia.azurecontainerapps.io/how-it-works) page is an interactive walkthrough for anyone, technical or not. It steps through one message, lets you play the permission gate, and has a slider for the policy-match cutoff.
+The [interactive explainer](https://iamr1ddl3.github.io/ecom-order-support-agent/explainer/) follows one customer message through the agent in 11 steps, for anyone, technical or not. It shows each check on the way: the classifier, the policy search, the model, the permission gate and the trace. Use Next and Back or the arrow keys. It also runs offline: open `docs/explainer/index.html` in a browser.
 
-[![Step-by-step walkthrough with the gate denying another customer's order](docs/images/how-it-works.png)](https://ecom-agent.delightfulflower-dbb15f8e.centralindia.azurecontainerapps.io/how-it-works)
+[![Step 9 of the explainer: the gate denies a request for another customer's order](docs/images/explainer.png)](https://iamr1ddl3.github.io/ecom-order-support-agent/explainer/#9)
 
 **What is running in the demo right now**
 
@@ -123,6 +123,7 @@ mcp_server/         MCP stdio server: lookup_order, check_account_status (+ mock
 rag/                BM25 and pgvector retrievers, 6 policy docs, index builder
 eval/               trajectory eval, LLM-as-judge, baseline, reports
 static/             the help center page and the how-it-works page
+docs/explainer/     the interactive explainer (served on GitHub Pages)
 infra/              AWS stack, deploy and teardown scripts (earlier deployment)
 ```
 
