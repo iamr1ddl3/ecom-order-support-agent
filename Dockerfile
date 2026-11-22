@@ -1,4 +1,4 @@
-# Container image for ECS Fargate (§2.6.1).
+# Container image for ECS Fargate.
 #
 # Must ship the MCP server too, not just the agent: mcp_server/server.py is
 # launched as a stdio SUBPROCESS on every turn (agent/harness.py), so it has to

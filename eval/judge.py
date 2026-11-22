@@ -1,11 +1,11 @@
 """
-LLM-as-judge (§2.3) — the second scoring method, for what a rule can't check.
+LLM-as-judge — the second scoring method, for what a rule can't check.
 
 The trajectory eval proves the right STEPS ran. It cannot tell you whether the
 answer built on those steps is actually supported by what came back, or whether
 the agent quietly invented a delivery date that reads perfectly. That's this.
 
-Two things the assignment is specific about, and both change the result:
+Two design choices, and both change the result:
 
 1. **A fact-checking rubric, not a vague one.** "Is this a good response?" scores
    fluency, and a confidently fabricated detail is fluent. The rubric here asks
@@ -14,13 +14,13 @@ Two things the assignment is specific about, and both change the result:
    order record — never the agent's own text, which would just ask the model to
    agree with itself.
 
-2. **Repeated runs, averaged.** §6's second pitfall is trusting a single judge
+2. **Repeated runs, averaged.** A common pitfall is trusting a single judge
    run as a verdict; judge scores are non-deterministic. Each input is scored
    RUNS times and averaged, and the spread is reported alongside the mean —
    a 7.0 from {7,7,7} and a 7.0 from {3,8,10} are not the same finding, and
    only printing the mean would hide that.
 
-The judge reuses the agent's own provider (§7): a judge is just another prompt.
+The judge reuses the agent's own provider: a judge is just another prompt.
 
 Run: python -m eval.judge            (all judgeable tickets)
      python -m eval.judge --runs 5
@@ -39,7 +39,7 @@ from agent.providers import PROVIDERS
 from eval.trajectory_eval import load_tickets
 from rag.retriever import load_policy_docs
 
-RUNS = 3  # §6: never report a single judge run as a verdict.
+RUNS = 3  # never report a single judge run as a verdict.
 
 _RUBRIC = """You are grading a customer-support agent's response for factual grounding.
 
@@ -128,7 +128,7 @@ def judge_once(provider, question: str, reference: str, response: str,
 
     Without the retry a dropped connection silently costs a sample, and the run
     reports a mean over fewer runs than requested while claiming the configured
-    number — which is the §6 pitfall wearing a disguise. Returns None only when
+    number — which is the single-run pitfall in disguise. Returns None only when
     every attempt failed; callers must report the real sample count.
     """
     prompt = _RUBRIC.format(question=question, reference=reference, response=response)
@@ -219,7 +219,7 @@ def main() -> int:
     noisy = [r for r in rows if r[3] >= 3]
     if noisy:
         print(f"Non-determinism: {len(noisy)} ticket(s) varied by >=3 points across runs "
-              f"— {[r[0] for r in noisy]}. This is why a single run is not a verdict (§6).")
+              f"— {[r[0] for r in noisy]}. This is why a single run is not a verdict.")
     else:
         print(f"Non-determinism: no ticket varied by >=3 points across {args.runs} runs.")
     return 0

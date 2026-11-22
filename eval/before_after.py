@@ -1,14 +1,13 @@
 """
-The before/after report (§2.5).
+The before/after report.
 
 Runs the SAME eval suite against two versions of the agent and prints both pass
-rates plus exactly which tickets changed status. §2.5 is explicit that the output
-has to be a specific number — "83% to 50%, and here is which tickets flipped" —
+rates plus exactly which tickets changed status. The output is a specific number — "83% to 50%, and here is which tickets flipped" —
 not "the regressed version performs worse".
 
 The regressed version is selected by `AGENT_REGRESSION`, read in
 agent/tools_schema.py. Two flavours, both of which break the PATH while leaving
-the prose plausible (§2.4's own examples):
+the prose plausible:
 
   drop_lookup_order   removes the lookup_order tool. The model can no longer
                       check an order, but it still answers — fluently, from the
@@ -54,7 +53,7 @@ def _run_variant(label: str, regression: str | None, provider: str | None):
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Before/after eval comparison (§2.5).")
+    ap = argparse.ArgumentParser(description="Before/after eval comparison.")
     ap.add_argument("--provider", choices=PROVIDERS, default=None)
     ap.add_argument("--regression", choices=REGRESSIONS, default="drop_lookup_order")
     args = ap.parse_args()
@@ -93,7 +92,7 @@ def main() -> int:
         print(f"     after : {after[tid].trajectory}")
         for f in after[tid].failures:
             print(f"     why   : {f}")
-        # The point of §2.5: the answer often still READS fine.
+        # The point: the answer often still READS fine.
         snippet = " ".join(after[tid].reply.split())[:160]
         if snippet:
             print(f"     answer: \"{snippet}...\"")

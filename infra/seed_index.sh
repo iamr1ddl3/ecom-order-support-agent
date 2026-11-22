@@ -10,7 +10,7 @@
 # It runs inside the task rather than from here because RDS is not publicly
 # accessible — its security group admits only the ECS task's security group, so
 # no route to the database exists from outside the VPC. That's the intended
-# design (§7), not an obstacle to work around by opening the database up.
+# design, not an obstacle to work around by opening the database up.
 set -euo pipefail
 
 PROJECT="${PROJECT_NAME:-ecom-agent}"

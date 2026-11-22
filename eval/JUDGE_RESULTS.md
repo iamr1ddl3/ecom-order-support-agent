@@ -1,11 +1,11 @@
-# LLM-as-judge results (§2.3)
+# LLM-as-judge results
 
 Real scores from a real run, not a description of a judge that exists.
 
 ```
 Provider : groq (openai/gpt-oss-120b)
 Command  : python -m eval.judge --provider groq
-Tickets  : 13 (§2.3 asks for >=5)
+Tickets  : 13
 Runs     : 3 per ticket, averaged  = 39 judge calls
 Rubric   : "does every specific claim in this response appear in the reference?"
            scored 0-10 against the policy doc / order record / prior tickets —
@@ -30,9 +30,9 @@ Rubric   : "does every specific claim in this response appear in the reference?"
 
 **Mean grounding score: 6.82 / 10.** Lowest: T07 at 0.00.
 
-## Why every input is scored three times (§6)
+## Why every input is scored three times
 
-§6's second pitfall is trusting a single judge run as a verdict. That isn't
+A common pitfall is trusting a single judge run as a verdict. That isn't
 hypothetical here — **4 of 13 tickets varied by ≥3 points across three identical
 calls**, and T10 and T11 both swung a full 7 points (0 → 7). A single run would
 have reported T10 as either a clean failure or a near-pass depending purely on
@@ -66,7 +66,7 @@ nowhere in the record.
 **The trajectory eval passes T07.** Its required step is
 `retrieval:shipping_delays`, that retrieval happened, superset satisfied. The
 path was right and the claim built on it was still false — which is precisely
-the gap §2.3 says a second scoring method exists to cover.
+the gap a second scoring method exists to cover.
 
 **T02, T08, T10 — ungrounded date arithmetic.** The agent asserts *"today is
 2026-08-08"* and computes claim windows from it. It has no clock and no

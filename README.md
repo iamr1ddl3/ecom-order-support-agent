@@ -103,9 +103,9 @@ table shows what each type mostly depends on to answer well.
 ## Prerequisites
 
 - **Python 3.10+** (developed on 3.14). For the default BM25 backend nothing else
-  is needed — no database, no Docker, no embedding-model download. The Assignment 2
+  is needed — no database, no Docker, no embedding-model download. The
   pgvector backend does need Postgres and an OpenAI key; see
-  [Retrieval on pgvector](#7-retrieval-on-pgvector-262).
+  [Retrieval on pgvector](#7-retrieval-on-pgvector).
 - One LLM API key for any one of: **Anthropic** (default), **Groq** (free tier),
   **GLM via Z.ai**, or **OpenRouter** (one key for Anthropic, OpenAI and other
   vendors). Groq, GLM and OpenRouter share one OpenAI-compatible provider class.
@@ -137,7 +137,7 @@ cp .env.example .env
 ## How to run it
 
 **Start here — the scripted demo** runs all 5 ticket scenarios end to end (this is
-what the video records):
+what you'd show in a demo):
 
 ```bash
 python main.py --demo
@@ -204,12 +204,12 @@ the following lines runs *only* when `decision.allowed`. The model proposes a
 ticket's bound customer and returns ALLOW or DENY; a denied call never reaches the
 server. The MCP server (`mcp_server/server.py`) re-checks ownership too, so no
 unscoped path exists anywhere — but that server check is defense-in-depth, not the
-boundary. This is deliberate: the assignment's common pitfall is letting the
+boundary. This is deliberate: a common mistake is letting the
 proposed call execute and bolting the permission check on *inside* the tool as an
 afterthought. Here the harness is the real boundary, and you can point at the exact
 line where a proposed action is checked before it runs.
 
-### Defensible decisions
+### Key design decisions
 
 **1. How I scoped ticket types, and why.** Four types — `order_status`,
 `delivery_issue`, `refund_request`, `subscription_account` — chosen because each
@@ -236,22 +236,19 @@ differently in each tool.
 ## Not in scope (by design)
 
 `issue_refund` — the one irreversible action — is intentionally not built. It
-belongs later in the cohort, once human-in-the-loop approval and policy guardrails
+belongs in a later iteration, once human-in-the-loop approval and policy guardrails
 exist to gate it. The permission gate already rejects it as an unoffered tool
 (see `test_gate.py`).
 
 ---
 
-# Assignment 2 — Tracing, Evaluation & the Regression Gate
+# Tracing, Evaluation & the Regression Gate
 
 Four layers on top of the same agent: real tracing, trajectory + LLM-judge
 evaluation, a CI gate that blocks a regressed version, and a pgvector retrieval
 backend.
 
-Branches: `assignment-1` (tag `assignment-1-submission`) marks the A1 end-state
-at `8f793ea`; `assignment-2` branches from it.
-
-## 1. Tracing setup (§2.1)
+## 1. Tracing setup
 
 [LangFuse](https://cloud.langfuse.com) Cloud free tier. Create a project, then
 **Settings → API Keys**, and put these in `.env`:
@@ -288,7 +285,7 @@ Verified on all 8 turns of a full `--demo` run. The gate decision rides on the
 tool span, so a blocked cross-customer read is visible in the trace as an
 *attempt that was denied* rather than a call that never happened.
 
-## 2. Trajectory eval (§2.2)
+## 2. Trajectory eval
 
 ```mermaid
 flowchart LR
@@ -309,7 +306,7 @@ python -m eval.trajectory_eval --write-baseline # record a new known-good score
 ```
 
 - **Test tickets:** `eval/test_tickets.json` — 13 tickets across all 4 ticket
-  types (§2.2 asks for ≥10 across ≥3).
+  types.
 - **Baseline:** `eval/baseline.json` — 100.0% (13/13).
 
 It scores the **path**, not the prose, in three shapes:
@@ -322,14 +319,14 @@ It scores the **path**, not the prose, in three shapes:
 
 `expect_gate_deny` checks *proposed and blocked* deliberately: a run where the
 model never proposed the call proves nothing about the gate, and a naive "was
-anything wrongly allowed?" check would pass it. See §2.5 below — that's exactly
+anything wrongly allowed?" check would pass it. See the before/after section below — that's exactly
 what the regression does.
 
 **The suite scored 100% on the first run, so `eval/test_check.py` exists** to
 prove the scorer isn't vacuous. It feeds deliberately-broken trajectories in and
 requires rejection. No LLM, runs free in CI.
 
-## 3. Confident wrong path (§2.2) — `eval/CONFIDENT_WRONG_PATH.md`
+## 3. Confident wrong path — `eval/CONFIDENT_WRONG_PATH.md`
 
 **Two real cases**, both found by reading actual output. They fail in opposite
 directions, which is the point:
@@ -351,7 +348,7 @@ directions, which is the point:
   days late" and a severe-weather ruling from the misreading. The trajectory is
   correct, so no path check can catch it.
 
-## 4. LLM-as-judge (§2.3) — `eval/JUDGE_RESULTS.md`
+## 4. LLM-as-judge — `eval/JUDGE_RESULTS.md`
 
 ```bash
 python -m eval.judge --provider groq
@@ -362,19 +359,19 @@ scored against the policy doc / order record / prior tickets — never the agent
 own text. **39 real judge calls** (13 tickets × 3 runs). **Mean grounding: 6.82 /
 10.**
 
-Each input is scored 3× and averaged because §6's pitfall is real here: **4 of 13
+Each input is scored 3× and averaged because judge scores are noisy: **4 of 13
 tickets varied by ≥3 points across identical calls**, two by a full 7 points. The
 spread prints beside every mean — a 6.00 from {4,10,4} is not a 6.00 from
 {6,6,6}.
 
-## 5. The CI gate (§2.4)
+## 5. The CI gate
 
 **File:** `.github/workflows/eval-gate.yml`. **Threshold: 10 points**, relative to
 baseline.
 
 Two jobs. `fast-checks` runs the no-LLM suites (no secrets, so fork PRs still get
 signal, and a broken scorer can't hide behind a green eval); `eval-gate` then runs
-the trajectory eval. **The pass/fail logic is in the Python, not the YAML** (§7) —
+the trajectory eval. **The pass/fail logic is in the Python, not the YAML** —
 CI just runs the script and uses its exit code.
 
 ```bash
@@ -388,11 +385,11 @@ That distinction exists because the first CI runs failed on a missing secret and
 then on an exhausted provider quota, both reported as "regression" — and a gate
 that goes red for the wrong reason is one people learn to ignore.
 
-### Watched blocking a real regressed version (§2.4)
+### Watched blocking a real regressed version
 
 | Run | Branch | Result |
 |---|---|---|
-| [31296187273](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296187273) | `assignment-2` | **success** — 13/13, gate PASS |
+| [31296187273](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296187273) | feature branch | **success** — 13/13, gate PASS |
 | [31296404885](https://github.com/iamr1ddl3/ecom-order-support-agent/actions/runs/31296404885) | `regression-demo` | **failure** — 8/13, −38.5 points, gate FAIL |
 
 Branch `regression-demo` removes `lookup_order` from the offered tools and is
@@ -400,7 +397,7 @@ deliberately not for merge. CI reproduced the local before/after figure exactly
 — same 61.5%, same five tickets — so the gate is measuring the agent, not the
 runner.
 
-## 6. Before/after (§2.5) — `eval/BEFORE_AFTER.md`
+## 6. Before/after — `eval/BEFORE_AFTER.md`
 
 ```mermaid
 xychart-beta
@@ -427,7 +424,7 @@ accurate refusals failures. The trajectory gate just sees the missing step.
 cross-customer read, so the permission gate is never exercised. The security
 boundary stops being *tested* while nothing appears to break.
 
-## 7. Retrieval on pgvector (§2.6.2)
+## 7. Retrieval on pgvector
 
 ```bash
 docker run -d --name pgvector -p 5432:5432 -e POSTGRES_PASSWORD=postgres pgvector/pgvector:pg17
@@ -456,7 +453,7 @@ nearest wrong hit  (customs → shipping_delays)    d = 0.5313
 An intuitive guess of 0.62 "feels" strict for cosine distance and would have
 broken the gap path.
 
-## 8. The two Defensible justifications (§3)
+## 8. Two design justifications
 
 ### 1. Why the regression threshold is 10 points
 
@@ -480,11 +477,11 @@ check catches the drift itself.
 ### 2. What the gate checks — and what that can't catch
 
 **The gate checks the trajectory: which tool and retrieval steps actually ran.**
-It does not read the final answer. That's deliberate — §6 names a final-answer
-gate as the main way to lose points here, because a fluent answer built on a
+It does not read the final answer. That's deliberate: a final-answer
+gate misses the regressions that matter, because a fluent answer built on a
 skipped policy check reads exactly like a correct one.
 
-**What it cannot catch is T07** (§3 above): the agent called the right tool,
+**What it cannot catch is T07**: the agent called the right tool,
 retrieved the right doc, then misread `status: delayed` as delivered and invented
 a delivery date and a compensation ruling. The path is *correct*. No path check
 can see that, and this is not hypothetical — the judge scored it 0.00 three times
@@ -497,7 +494,7 @@ explicit — **the gate blocks capability regressions deterministically; the jud
 catches grounding failures non-deterministically and is read by a human.**
 Neither alone is sufficient, and T03 vs T07 is the proof.
 
-## Assignment 2 file map
+## Evaluation, tracing and deployment file map
 
 ```
 agent/
@@ -519,7 +516,7 @@ rag/
   eval-gate.yml          fast-checks -> eval-gate (exit code decides)
 ```
 
-## 9. AWS deployment (§2.6) — deployed and demonstrated
+## 9. AWS deployment — deployed and demonstrated
 
 Full evidence in [`infra/DEPLOYMENT.md`](infra/DEPLOYMENT.md): real curl output,
 the scale-out event, and the four bugs the live deploy exposed.
@@ -544,7 +541,7 @@ flowchart LR
     ECS -.-> CW[("CloudWatch logs")]
 ```
 
-### Architecture, named (§8.6)
+### Architecture, named
 
 | Thing | Value |
 |---|---|
@@ -564,7 +561,7 @@ index is seeded from inside the running task (`infra/seed_index.sh`), not from a
 laptop. Security groups chain internet → ALB → task → database, each tier
 admitting only the one above it.
 
-### Deploy pipeline (§8.7) — OIDC, no static keys
+### Deploy pipeline — OIDC, no static keys
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) authenticates with
 `sts:AssumeRoleWithWebIdentity` against role
@@ -580,12 +577,12 @@ Every hit is a comment explaining their absence. Images are tagged by
 `$GITHUB_SHA`, never `latest`. The deploy job declares `needs: eval-gate`, reusing
 the gate via `workflow_call` so a regressed agent cannot reach AWS.
 
-`infra/setup_oidc.sh` handles the trap §7 names: GitHub's docs show
+`infra/setup_oidc.sh` handles a common trap: GitHub's docs show
 `repo:owner/repo:ref:…`, but the token carries stable **numeric** ids, so an exact
 `StringEquals` silently never matches and fails as an unhelpful permissions error.
 The trust policy uses a wildcarded `StringLike` on both forms.
 
-### Teardown (§8.8) — tested, not just described
+### Teardown — tested, not just described
 
 ```bash
 bash infra/teardown.sh
@@ -597,7 +594,7 @@ resource), and the ECS service must drain before the target group detaches. It
 finishes by **re-querying every resource** and exits non-zero if anything
 survived — so "it said done" and "it is gone" are the same statement.
 
-### Cost discipline (§2.6.5)
+### Cost discipline
 
 RDS bills continuously. Stand up → test → record → tear down, same day.
 Roughly $0.05–0.08/hour for the whole stack.

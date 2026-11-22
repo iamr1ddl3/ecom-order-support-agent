@@ -7,8 +7,8 @@ Two independent protections live here, and they are different things:
 1. Schema validation — FREE, from MCP. FastMCP derives a JSON schema from each
    tool's type hints (`order_id: str`). A malformed call (wrong type, missing
    required field) is rejected by the protocol layer before the function body
-   runs. We wrote no `if` for this; that's the point (assignment §2.2 "rejected
-   by the tool layer itself, not a manual if check you bolted on").
+   runs. We wrote no `if` for this; that's the point: rejected
+   by the tool layer itself, not a manual if check bolted on.
 
 2. Permission scoping — NOT free, and it is deliberately DEFENSE-IN-DEPTH here.
    The primary boundary is the harness gate (agent/harness.py), which rejects a

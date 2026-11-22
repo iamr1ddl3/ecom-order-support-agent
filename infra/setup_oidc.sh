@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # One-time: register GitHub as an OIDC identity provider and create the deploy
-# role the Actions pipeline assumes (§2.6.1).
+# role the Actions pipeline assumes.
 #
 #   bash infra/setup_oidc.sh iamr1ddl3/ecom-order-support-agent
 #
 # Why this exists: the deploy job must authenticate with
 # sts:AssumeRoleWithWebIdentity, NOT a static AWS_ACCESS_KEY_ID /
 # AWS_SECRET_ACCESS_KEY pair in repo secrets. A static key in a workflow file is
-# called out in §2.6.1 as a real deduction. Nothing here ever puts a long-lived
+# a standing security risk. Nothing here ever puts a long-lived
 # AWS credential anywhere — GitHub presents a short-lived signed token and AWS
 # exchanges it for temporary credentials scoped to this one repository.
 #
-# The sub claim format is the trap (§7). GitHub's docs show
+# The sub claim format is the trap. GitHub's docs show
 #   repo:owner/repo:ref:refs/heads/main
 # but the token actually carries stable NUMERIC ids:
 #   repo:OWNER_ID/REPO_ID:ref:...

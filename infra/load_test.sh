@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Trigger a real scale-out and show the task count rising (§2.6.3).
+# Trigger a real scale-out and show the task count rising.
 #
 #   bash infra/load_test.sh http://your-alb-dns
 #
-# §2.6.3 asks for evidence, not a description: "a simple loop firing several
-# concurrent requests at your ALB URL is enough". No Apache Bench needed.
+# Evidence, not a description: a simple loop firing several concurrent
+# requests at the ALB URL is enough. No Apache Bench needed.
 #
 # It prints the ECS running-task count every 15s alongside the load, so a single
 # screen recording shows the cause and the effect together — which is the shot

@@ -1,9 +1,9 @@
 """
-HTTP wrapper so the ALB has something to route to (§2.6.1).
+HTTP wrapper so the ALB has something to route to.
 
 The agent itself is a CLI. An Application Load Balancer needs an HTTP target to
 health-check and forward to, so this exposes the same `Harness` over two
-endpoints — it adds no agent behaviour of its own. `curl`-able, per §4.5.
+endpoints — it adds no agent behaviour of its own. `curl`-able.
 
   GET  /health   ALB target-group health check. Deliberately does NOT touch the
                  LLM or the database: a health check that calls a paid API turns
@@ -96,7 +96,7 @@ def chat(req: ChatRequest) -> dict:
     return {
         "customer_id": req.customer_id,
         "reply": reply,
-        # The same trajectory the §2.2 eval scores — exposed so a reviewer can
+        # The same trajectory the trajectory eval scores — exposed so a reviewer can
         # see which tools ran and what the gate decided without the dashboard.
         "trajectory": [s.key() for s in ticket.steps],
         "gate_decisions": [

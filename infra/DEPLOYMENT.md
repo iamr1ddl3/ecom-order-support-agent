@@ -1,10 +1,9 @@
-# AWS deployment — live evidence (§2.6)
+# AWS deployment — live evidence
 
-Real output from the running stack, captured during deployment. §6 flags
-"describing the AWS deployment instead of demonstrating it" as this assignment's
-new pitfall, so everything here is a command that ran and what it returned.
+Real output from the running stack, captured during deployment. Describing a
+deployment is not the same as demonstrating it, so everything here is a command that ran and what it returned.
 
-## Resource names (§8.6)
+## Resource names
 
 | Thing | Value |
 |---|---|
@@ -19,7 +18,7 @@ new pitfall, so everything here is a command that ran and what it returned.
 | Autoscaling | CPU target-tracking, **50%**, min **1** / max **4** |
 | OIDC deploy role | `arn:aws:iam::289702314533:role/ecom-agent-github-deploy` |
 
-## The agent responding at its real ALB URL (§4.5)
+## The agent responding at its real ALB URL
 
 **RAG grounded in RDS pgvector** — retrieval runs against Postgres in RDS, not a
 local store:
@@ -61,7 +60,7 @@ $ curl -X POST $URL/chat -d '{"customer_id":"cust_1001","message":"Can you look 
 }
 ```
 
-## A real scale-out event (§2.6.3)
+## A real scale-out event
 
 `bash infra/load_test.sh $URL` — 12 concurrent workers against `/chat`. It hits
 `/chat` rather than `/health` deliberately: `/health` returns a dict and burns no

@@ -1,5 +1,5 @@
 """
-LangFuse tracing setup (§2.1).
+LangFuse tracing setup.
 
 The agent must produce real, timestamped, correctly-nested spans in a dashboard —
 not print statements standing in for them. The existing `[GATE]`/`[RETRIEVER]`

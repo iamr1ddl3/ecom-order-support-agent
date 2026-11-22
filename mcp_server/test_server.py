@@ -1,6 +1,6 @@
 """
 MCP-layer sanity check — no LLM. Proves the two protections in server.py work at
-the protocol layer, exactly what §2.2 + §3 (Craft) ask to demonstrate:
+the protocol layer:
 
   1. malformed call (order_id as a list, not a string) -> rejected by FastMCP's
      derived schema, isError=True, no crash, tool body never runs.

@@ -1,5 +1,5 @@
 """
-Memory for a support conversation — the two halves of §2.4.
+Memory for a support conversation — short-term and long-term.
 
 - Short-term: the message buffer for the current ticket. It IS the `messages`
   list the provider threads turn to turn, so "retains earlier turns" is not a

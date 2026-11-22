@@ -49,10 +49,10 @@ def _to_groq_tools(specs):
 
 
 def _active_specs():
-    """TOOL_SPECS, minus anything removed by a deliberate regression (§2.4).
+    """TOOL_SPECS, minus anything removed by a deliberate regression.
 
-    AGENT_REGRESSION=drop_lookup_order is the "removing a tool" case the
-    assignment names. It's real: the model genuinely isn't offered the tool, so
+    AGENT_REGRESSION=drop_lookup_order is the "removing a tool" regression.
+    It's real: the model genuinely isn't offered the tool, so
     it answers from the question's own wording instead of the order record. The
     reply usually still reads fine, which is the entire point — only the
     trajectory shows the lookup never happened.
