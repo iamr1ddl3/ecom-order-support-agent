@@ -27,6 +27,7 @@ COPY mcp_server/  ./mcp_server/
 COPY rag/         ./rag/
 COPY data/        ./data/
 COPY eval/        ./eval/
+COPY static/      ./static/
 COPY app.py main.py scenarios.py ./
 
 # Non-root: the task has no reason to run privileged, and this is the cheapest
